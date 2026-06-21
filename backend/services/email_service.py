@@ -2,6 +2,7 @@ import os
 import smtplib
 import logging
 import httpx
+from html import escape
 from email.message import EmailMessage
 from email.utils import make_msgid
 
@@ -56,15 +57,24 @@ def _from_address():
     return f"{from_name} <{from_email}>" if from_name else from_email
 
 
+def _plain_text_to_html(plain_text):
+    escaped_body = escape(plain_text).replace("\r\n", "\n").replace("\r", "\n")
+    formatted_body = escaped_body.replace("\n", "<br>")
+    return (
+        '<div style="font-family: Arial, sans-serif; line-height: 1.6; color: #111827;">'
+        f"{formatted_body}"
+        "</div>"
+    )
+
+
 def _send_resend(recipient_email, subject, plain_text, html_body=None):
     payload = {
         "from": _from_address(),
         "to": [recipient_email],
         "subject": subject,
         "text": plain_text,
+        "html": _plain_text_to_html(plain_text),
     }
-    if html_body:
-        payload["html"] = html_body
 
     try:
         response = httpx.post(
