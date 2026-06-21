@@ -1,0 +1,15 @@
+this is the syllabus for the python im going to teach for this each ill provide the topics pdf.. generate me the assessments.. pdf,answer key pdf ,assessments question templat,answer key template, 
+
+ive provided the Python - 11,12,13 topics for the UNIT 4 assesments use those pdfs to generate this assessments also include all this 4 topics to be in this assesssements  
+
+
+
+30 MCQs
+
+20 Fill-ups
+
+10 Simple coding questions
+
+Total: 60 questions
+
+Total marks: 100
