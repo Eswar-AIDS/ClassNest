@@ -118,20 +118,35 @@ def ensure_material_attachment_columns():
         return
     columns = {column["name"] for column in inspector.get_columns("material_attachments")}
     with engine.begin() as connection:
+        # Make file_path nullable to support Supabase Storage uploads (storage_provider="supabase" has file_path=null)
+        try:
+            if DATABASE_URL.startswith("postgresql"):
+                connection.execute(text("ALTER TABLE material_attachments ALTER COLUMN file_path DROP NOT NULL"))
+            elif DATABASE_URL.startswith("sqlite"):
+                # SQLite doesn't support ALTER COLUMN constraints, this is a schema limitation
+                # But SQLite is flexible with NOT NULL, so we just warn
+                pass
+        except Exception as e:
+            print(f"⚠️  Could not alter file_path constraint (may already be nullable): {e}")
+        
         if "storage_provider" not in columns:
             connection.execute(text("ALTER TABLE material_attachments ADD COLUMN storage_provider VARCHAR(20) NOT NULL DEFAULT 'local'"))
         if "local_path" not in columns:
             connection.execute(text("ALTER TABLE material_attachments ADD COLUMN local_path VARCHAR(500)"))
         if "storage_path" not in columns:
             connection.execute(text("ALTER TABLE material_attachments ADD COLUMN storage_path VARCHAR(500)"))
-        # Migrate existing file_path to local_path if not already done
-        existing_local_paths = connection.execute(
-            text("SELECT COUNT(*) FROM material_attachments WHERE local_path IS NULL AND file_path IS NOT NULL")
-        ).scalar()
-        if existing_local_paths and existing_local_paths > 0:
-            connection.execute(
-                text("UPDATE material_attachments SET local_path = file_path WHERE local_path IS NULL AND file_path IS NOT NULL")
-            )
+        
+        # Migrate existing file_path to local_path for backward compatibility
+        try:
+            existing_local_paths = connection.execute(
+                text("SELECT COUNT(*) FROM material_attachments WHERE local_path IS NULL AND file_path IS NOT NULL")
+            ).scalar()
+            if existing_local_paths and existing_local_paths > 0:
+                connection.execute(
+                    text("UPDATE material_attachments SET local_path = file_path WHERE local_path IS NULL AND file_path IS NOT NULL")
+                )
+        except Exception as e:
+            print(f"⚠️  Could not migrate existing file_path data: {e}")
 
 
 def get_db():

@@ -134,6 +134,8 @@ async def upload_material_attachment(upload: UploadFile, material_id: int) -> mo
             
             supabase.storage.from_(SUPABASE_BUCKET).upload(storage_path, file_bytes)
             
+            # For backward compatibility, set file_path to storage_path
+            # This way older code that reads file_path will work
             return models.MaterialAttachment(
                 material_id=material_id,
                 file_name=file_name,
@@ -142,6 +144,7 @@ async def upload_material_attachment(upload: UploadFile, material_id: int) -> mo
                 mime_type=mime_type,
                 file_size=file_size,
                 storage_provider="supabase",
+                file_path=storage_path,  # For backward compatibility
                 storage_path=storage_path,
             )
         except Exception as e:

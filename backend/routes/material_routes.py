@@ -66,10 +66,15 @@ async def create_with_attachments(
         db.commit()
         db.refresh(item)
         return item
-    except Exception:
+    except Exception as e:
         db.rollback()
+        # Clean up uploaded files
         await delete_material_all_attachments(item.id)
-        raise
+        # Log specific error
+        print(f"❌ Error creating material with attachments: {str(e)}")
+        if "not-null constraint" in str(e).lower() or "null" in str(e).lower():
+            raise HTTPException(500, "Database schema issue: file_path column. Contact administrator.")
+        raise HTTPException(500, f"Failed to create material with attachments: {str(e)}")
 
 
 @router.get("/units/{unit_id}/materials", response_model=list[schemas.MaterialOut])
@@ -138,11 +143,16 @@ async def add_attachments(
         db.commit()
         db.refresh(item)
         return item
-    except Exception:
+    except Exception as e:
         db.rollback()
+        # Clean up uploaded files
         for attachment in saved:
             await delete_material_attachment(attachment)
-        raise
+        # Log specific error
+        print(f"❌ Error adding attachments: {str(e)}")
+        if "not-null constraint" in str(e).lower() or "null" in str(e).lower():
+            raise HTTPException(500, "Database schema issue: file_path column. Contact administrator.")
+        raise HTTPException(500, f"Failed to add attachments: {str(e)}")
 
 
 @router.put("/materials/{material_id}", response_model=schemas.MaterialOut)
