@@ -34,7 +34,6 @@ export default function Login() {
       <label><span className="label">Email address</span><input className="field" type="email" required value={form.email} onChange={event => setForm({ ...form, email: event.target.value })}/></label>
       <label><span className="label">Password</span><input className="field" type="password" required value={form.password} onChange={event => setForm({ ...form, password: event.target.value })}/></label>
       <button disabled={busy} className="btn-primary w-full">{busy ? 'Signing in…' : 'Sign in'}</button>
-      <div className="rounded-xl bg-slate-50 p-3 text-xs leading-5 text-slate-500">Demo teacher: teacher@classnest.com / teacher123<br/>Demo student: student@classnest.com / student123</div>
     </form>
   </AuthShell>
 }

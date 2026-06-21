@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy.orm import Session
 from assessment_excel import remove_excel_source
 from attachment_storage import remove_material_files
@@ -145,3 +145,16 @@ def members(classroom_id: int, db: Session = Depends(get_db), user=Depends(get_c
     current_member = require_member(db, classroom_id, user.id)
     rows = db.query(models.ClassMember, models.User).join(models.User).filter(models.ClassMember.classroom_id == classroom_id).all()
     return [{"id": m.id, "user_id": u.id, "name": u.name, "email": u.email if current_member.role == "teacher" or u.id == user.id else "", "role": m.role, "joined_at": m.joined_at} for m, u in rows]
+
+
+@router.delete("/{classroom_id}/members/{member_id}", status_code=204)
+def remove_member(classroom_id: int, member_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)):
+    require_teacher(db, classroom_id, user.id)
+    member = db.query(models.ClassMember).filter_by(id=member_id, classroom_id=classroom_id).first()
+    if not member:
+        raise HTTPException(404, "Class member not found")
+    if member.user_id == user.id:
+        raise HTTPException(400, "You cannot remove yourself from the class")
+    db.delete(member)
+    db.commit()
+    return Response(status_code=204)
