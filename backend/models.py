@@ -270,6 +270,8 @@ class EmailNotificationRecipient(Base):
     email = Column(String(255), nullable=False)
     status = Column(String(20), default="pending", nullable=False)
     error_message = Column(Text, nullable=True)
+    final_subject = Column(String(200), nullable=True)
+    final_body = Column(Text, nullable=True)
     sent_at = Column(DateTime, nullable=True)
     notification = relationship("EmailNotification", back_populates="recipients")
     user = relationship("User")

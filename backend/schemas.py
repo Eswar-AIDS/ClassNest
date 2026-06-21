@@ -517,6 +517,8 @@ class EmailNotificationRecipientPreview(BaseModel):
     user_id: int
     name: str
     email: str
+    subject: str
+    message_body: str
 
 
 class EmailNotificationPreview(BaseModel):

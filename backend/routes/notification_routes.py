@@ -94,11 +94,11 @@ def validate_message(data):
 
 def replace_variables(value, classroom, teacher, recipient, assessment):
     variables = {
-        "{{student_name}}": recipient.user.name,
-        "{{class_name}}": classroom.name,
+        "{{student_name}}": recipient.user.name or "",
+        "{{class_name}}": classroom.name or "",
         "{{assessment_title}}": assessment.title if assessment else "",
         "{{unit_title}}": assessment.unit.title if assessment else "",
-        "{{teacher_name}}": teacher.user.name,
+        "{{teacher_name}}": teacher.user.name or "ClassNest teacher",
     }
     for variable, replacement in variables.items():
         value = value.replace(variable, replacement)
@@ -111,14 +111,19 @@ def recipient_preview(member):
 
 @router.post("/classrooms/{classroom_id}/notifications/email/preview", response_model=schemas.EmailNotificationPreview)
 def preview_email(classroom_id: int, data: schemas.EmailNotificationRequest, db: Session = Depends(get_db), user=Depends(get_current_user)):
-    class_and_teacher(db, classroom_id, user.id)
+    classroom, teacher = class_and_teacher(db, classroom_id, user.id)
     validate_message(data)
-    recipients, _ = resolve_recipients(db, classroom_id, data)
+    recipients, assessment = resolve_recipients(db, classroom_id, data)
+    personalized = [{
+        **recipient_preview(member),
+        "subject": replace_variables(data.subject.strip(), classroom, teacher, member, assessment),
+        "message_body": replace_variables(data.message_body.strip(), classroom, teacher, member, assessment),
+    } for member in recipients]
     return {
         "recipient_count": len(recipients),
-        "recipients": [recipient_preview(member) for member in recipients],
-        "subject": data.subject.strip(),
-        "message_body": data.message_body.strip(),
+        "recipients": personalized,
+        "subject": personalized[0]["subject"],
+        "message_body": personalized[0]["message_body"],
     }
 
 
@@ -220,16 +225,20 @@ def email_details(notification_id: int, db: Session = Depends(get_db), user=Depe
     item = db.get(models.EmailNotification, notification_id)
     if not item:
         raise HTTPException(404, "Email notification not found")
-    class_and_teacher(db, item.classroom_id, user.id)
+    classroom, teacher = class_and_teacher(db, item.classroom_id, user.id)
+    personalized = [{
+        "user_id": row.user_id,
+        "name": row.user.name,
+        "email": row.email,
+        "status": row.status,
+        "error_message": row.error_message,
+        "sent_at": row.sent_at,
+        "subject": replace_variables(item.subject, classroom, teacher, row, item.assessment),
+        "message_body": replace_variables(item.message_body, classroom, teacher, row, item.assessment),
+    } for row in item.recipients]
     return {
         **notification_summary(item),
-        "message_body": item.message_body,
-        "recipients": [{
-            "user_id": row.user_id,
-            "name": row.user.name,
-            "email": row.email,
-            "status": row.status,
-            "error_message": row.error_message,
-            "sent_at": row.sent_at,
-        } for row in item.recipients],
+        "subject": personalized[0]["subject"] if personalized else item.subject,
+        "message_body": personalized[0]["message_body"] if personalized else item.message_body,
+        "recipients": personalized,
     }
