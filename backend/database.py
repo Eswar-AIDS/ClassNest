@@ -1,21 +1,46 @@
 import os
 from pathlib import Path
 
+from dotenv import load_dotenv
 from sqlalchemy import create_engine, event, inspect, text
 from sqlalchemy.orm import declarative_base, sessionmaker
 
+load_dotenv()
+
 DEFAULT_DATABASE_PATH = Path(__file__).resolve().parent / "classnest.db"
-SQLALCHEMY_DATABASE_URL = os.getenv(
+DATABASE_URL = os.getenv(
     "DATABASE_URL", f"sqlite:///{DEFAULT_DATABASE_PATH.as_posix()}"
 )
-engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
 
+# Convert postgres:// to postgresql:// for SQLAlchemy compatibility
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+
+# Only use connect_args for SQLite
+connect_args = {}
+if DATABASE_URL.startswith("sqlite"):
+    connect_args = {"check_same_thread": False}
+
+engine = create_engine(DATABASE_URL, connect_args=connect_args)
+
+# Log database type on import
+def get_db_type():
+    if DATABASE_URL.startswith("sqlite"):
+        return "SQLite (local)"
+    elif DATABASE_URL.startswith("postgresql"):
+        return "PostgreSQL"
+    else:
+        return "Unknown"
+
+DB_TYPE = get_db_type()
 
 @event.listens_for(engine, "connect")
 def enable_sqlite_foreign_keys(dbapi_connection, _connection_record):
-    cursor = dbapi_connection.cursor()
-    cursor.execute("PRAGMA foreign_keys=ON")
-    cursor.close()
+    # Only enable PRAGMA for SQLite
+    if DATABASE_URL.startswith("sqlite"):
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
 
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -23,7 +48,7 @@ Base = declarative_base()
 
 
 def ensure_user_profile_columns():
-    """Apply the small additive SQLite migration needed by existing v1 databases."""
+    """Apply additive migration needed by existing v1 databases (works with SQLite and PostgreSQL)."""
     columns = {column["name"] for column in inspect(engine).get_columns("users")}
     with engine.begin() as connection:
         if "bio" not in columns:
@@ -33,7 +58,7 @@ def ensure_user_profile_columns():
 
 
 def ensure_assessment_columns():
-    """Keep existing SQLite databases compatible with assessment archiving."""
+    """Keep existing databases compatible with assessment archiving (SQLite and PostgreSQL)."""
     inspector = inspect(engine)
     if "assessments" not in inspector.get_table_names():
         return
@@ -50,7 +75,7 @@ def ensure_assessment_columns():
 
 
 def ensure_assessment_attempt_columns():
-    """Keep existing SQLite databases compatible with timed attempts."""
+    """Keep existing databases compatible with timed attempts (SQLite and PostgreSQL)."""
     inspector = inspect(engine)
     if "assessment_attempts" not in inspector.get_table_names():
         return
@@ -63,7 +88,7 @@ def ensure_assessment_attempt_columns():
 
 
 def ensure_unit_columns():
-    """Keep existing SQLite databases compatible with active-unit filtering."""
+    """Keep existing databases compatible with active-unit filtering (SQLite and PostgreSQL)."""
     inspector = inspect(engine)
     if "units" not in inspector.get_table_names():
         return
@@ -74,7 +99,7 @@ def ensure_unit_columns():
 
 
 def ensure_classroom_columns():
-    """Keep existing SQLite databases compatible with classroom archiving."""
+    """Keep existing databases compatible with classroom archiving (SQLite and PostgreSQL)."""
     inspector = inspect(engine)
     if "classrooms" not in inspector.get_table_names():
         return

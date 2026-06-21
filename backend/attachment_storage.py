@@ -8,6 +8,14 @@ from fastapi import HTTPException, UploadFile
 
 import models
 
+# TODO: Move production uploads to Supabase Storage.
+# Current implementation stores files locally on disk.
+# For production deployment, migrate to Supabase Storage:
+# 1. Install supabase client: pip install supabase
+# 2. Create Supabase storage bucket for materials
+# 3. Update save_upload() to use supabase.storage
+# 4. Update attachment_disk_path() to serve signed URLs
+
 BACKEND_ROOT = Path(__file__).resolve().parent
 UPLOAD_ROOT = BACKEND_ROOT / "uploads" / "materials"
 MAX_FILE_SIZE = 10 * 1024 * 1024
