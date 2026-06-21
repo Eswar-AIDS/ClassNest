@@ -111,6 +111,29 @@ def ensure_classroom_columns():
             connection.execute(text("ALTER TABLE classrooms ADD COLUMN archived_at DATETIME"))
 
 
+def ensure_material_attachment_columns():
+    """Migrate material_attachments for Supabase Storage support (SQLite and PostgreSQL)."""
+    inspector = inspect(engine)
+    if "material_attachments" not in inspector.get_table_names():
+        return
+    columns = {column["name"] for column in inspector.get_columns("material_attachments")}
+    with engine.begin() as connection:
+        if "storage_provider" not in columns:
+            connection.execute(text("ALTER TABLE material_attachments ADD COLUMN storage_provider VARCHAR(20) NOT NULL DEFAULT 'local'"))
+        if "local_path" not in columns:
+            connection.execute(text("ALTER TABLE material_attachments ADD COLUMN local_path VARCHAR(500)"))
+        if "storage_path" not in columns:
+            connection.execute(text("ALTER TABLE material_attachments ADD COLUMN storage_path VARCHAR(500)"))
+        # Migrate existing file_path to local_path if not already done
+        existing_local_paths = connection.execute(
+            text("SELECT COUNT(*) FROM material_attachments WHERE local_path IS NULL AND file_path IS NOT NULL")
+        ).scalar()
+        if existing_local_paths and existing_local_paths > 0:
+            connection.execute(
+                text("UPDATE material_attachments SET local_path = file_path WHERE local_path IS NULL AND file_path IS NOT NULL")
+            )
+
+
 def get_db():
     db = SessionLocal()
     try:

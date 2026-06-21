@@ -1,12 +1,11 @@
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile
-from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
-from attachment_storage import (
-    attachment_disk_path,
-    remove_attachment_file,
-    remove_material_files,
-    save_upload,
+from services.storage_service import (
+    delete_material_attachment,
+    delete_material_all_attachments,
+    upload_material_attachment,
+    download_material_attachment,
     validate_uploads,
 )
 from auth import get_current_user
@@ -63,13 +62,13 @@ async def create_with_attachments(
 
     try:
         for upload in uploads:
-            db.add(await save_upload(upload, item.id))
+            db.add(await upload_material_attachment(upload, item.id))
         db.commit()
         db.refresh(item)
         return item
     except Exception:
         db.rollback()
-        remove_material_files(item.id)
+        await delete_material_all_attachments(item.id)
         raise
 
 
@@ -90,7 +89,7 @@ def detail(material_id: int, db: Session = Depends(get_db), user=Depends(get_cur
 
 
 @router.get("/materials/{material_id}/attachments/{attachment_id}/download")
-def download_attachment(material_id: int, attachment_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)):
+async def download_attachment(material_id: int, attachment_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)):
     item = db.get(models.Material, material_id)
     if not item:
         raise HTTPException(404, "Material not found")
@@ -98,19 +97,11 @@ def download_attachment(material_id: int, attachment_id: int, db: Session = Depe
     attachment = db.query(models.MaterialAttachment).filter_by(id=attachment_id, material_id=material_id).first()
     if not attachment:
         raise HTTPException(404, "Attachment not found")
-    path = attachment_disk_path(attachment)
-    if not path.is_file():
-        raise HTTPException(404, "Attachment file not found")
-    return FileResponse(
-        path,
-        media_type=attachment.mime_type,
-        filename=attachment.file_name,
-        headers={"X-Content-Type-Options": "nosniff"},
-    )
+    return await download_material_attachment(attachment)
 
 
 @router.delete("/materials/{material_id}/attachments/{attachment_id}", status_code=204)
-def delete_attachment(material_id: int, attachment_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)):
+async def delete_attachment(material_id: int, attachment_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)):
     item = db.get(models.Material, material_id)
     if not item:
         raise HTTPException(404, "Material not found")
@@ -118,7 +109,7 @@ def delete_attachment(material_id: int, attachment_id: int, db: Session = Depend
     attachment = db.query(models.MaterialAttachment).filter_by(id=attachment_id, material_id=material_id).first()
     if not attachment:
         raise HTTPException(404, "Attachment not found")
-    remove_attachment_file(attachment)
+    await delete_material_attachment(attachment)
     db.delete(attachment)
     db.commit()
     return Response(status_code=204)
@@ -141,7 +132,7 @@ async def add_attachments(
     saved = []
     try:
         for upload in uploads:
-            attachment = await save_upload(upload, item.id)
+            attachment = await upload_material_attachment(upload, item.id)
             saved.append(attachment)
             db.add(attachment)
         db.commit()
@@ -150,7 +141,7 @@ async def add_attachments(
     except Exception:
         db.rollback()
         for attachment in saved:
-            remove_attachment_file(attachment)
+            await delete_material_attachment(attachment)
         raise
 
 
@@ -168,12 +159,12 @@ def update(material_id: int, data: schemas.MaterialInput, db: Session = Depends(
 
 
 @router.delete("/materials/{material_id}", status_code=204)
-def delete(material_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)):
+async def delete(material_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)):
     item = db.get(models.Material, material_id)
     if not item:
         raise HTTPException(404, "Material not found")
     require_teacher(db, item.unit.classroom_id, user.id)
     db.delete(item)
     db.commit()
-    remove_material_files(material_id)
+    await delete_material_all_attachments(material_id)
     return Response(status_code=204)

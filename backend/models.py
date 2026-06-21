@@ -83,11 +83,14 @@ class MaterialAttachment(Base):
     material_id = Column(Integer, ForeignKey("materials.id", ondelete="CASCADE"), nullable=False, index=True)
     file_name = Column(String(255), nullable=False)
     stored_file_name = Column(String(255), nullable=False, unique=True)
-    file_path = Column(String(500), nullable=False)
+    file_path = Column(String(500), nullable=True)
     file_type = Column(String(20), nullable=False)
     mime_type = Column(String(255), nullable=False)
     file_size = Column(Integer, nullable=False)
     uploaded_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    storage_provider = Column(String(20), default="local", nullable=False)
+    local_path = Column(String(500), nullable=True)
+    storage_path = Column(String(500), nullable=True)
     material = relationship("Material", back_populates="attachments")
 
 
