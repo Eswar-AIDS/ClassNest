@@ -1,6 +1,7 @@
 import os
 import smtplib
 import logging
+import httpx
 from email.message import EmailMessage
 from email.utils import make_msgid
 
@@ -8,9 +9,14 @@ logger = logging.getLogger(__name__)
 
 
 def configuration_error():
-    """Check if SMTP is properly configured. Returns error message or None."""
-    if os.getenv("EMAIL_PROVIDER", "smtp").strip().lower() != "smtp":
-        return "Unsupported EMAIL_PROVIDER. Use smtp for this ClassNest version"
+    """Check whether the selected email provider is configured."""
+    provider = os.getenv("EMAIL_PROVIDER", "smtp").strip().lower()
+    if provider == "resend":
+        required = ["RESEND_API_KEY", "SMTP_FROM_EMAIL"]
+        missing = [name for name in required if not os.getenv(name)]
+        return f"Resend is not configured. Missing: {', '.join(missing)}" if missing else None
+    if provider != "smtp":
+        return f"Unsupported EMAIL_PROVIDER: {provider}. Use resend or smtp"
     required = ["SMTP_HOST", "SMTP_PORT", "SMTP_FROM_EMAIL", "SMTP_PASSWORD"]
     missing = [name for name in required if not os.getenv(name)]
     if missing:
@@ -44,16 +50,61 @@ def _failure(recipient_email, exception, prefix):
     return False, f"{prefix}: {detail}" if detail else prefix, None
 
 
-def send_email(recipient_email, subject, plain_text, html_body=None):
-    """Send one email through SMTP and return (success, error_message, provider_id)."""
-    config_error = configuration_error()
-    if config_error:
-        return False, config_error, None
-
-    message = EmailMessage()
+def _from_address():
     from_name = os.getenv("SMTP_FROM_NAME", "ClassNest").strip()
     from_email = os.environ["SMTP_FROM_EMAIL"].strip()
-    message["From"] = f"{from_name} <{from_email}>" if from_name else from_email
+    return f"{from_name} <{from_email}>" if from_name else from_email
+
+
+def _send_resend(recipient_email, subject, plain_text, html_body=None):
+    payload = {
+        "from": _from_address(),
+        "to": [recipient_email],
+        "subject": subject,
+        "text": plain_text,
+    }
+    if html_body:
+        payload["html"] = html_body
+
+    try:
+        response = httpx.post(
+            "https://api.resend.com/emails",
+            headers={
+                "Authorization": f"Bearer {os.environ['RESEND_API_KEY']}",
+                "Content-Type": "application/json",
+            },
+            json=payload,
+            timeout=20,
+        )
+    except httpx.TimeoutException as exc:
+        logger.error("Resend timeout recipient=%s exception_class=%s exception_message=%s", recipient_email, type(exc).__name__, str(exc))
+        return False, f"Resend request timed out: {str(exc).strip() or 'request exceeded 20 seconds'}", None
+    except httpx.RequestError as exc:
+        logger.error("Resend request failed recipient=%s exception_class=%s exception_message=%s", recipient_email, type(exc).__name__, str(exc))
+        return False, f"Resend network error: {str(exc).strip() or type(exc).__name__}", None
+    except Exception as exc:
+        logger.error("Unexpected Resend error recipient=%s exception_class=%s exception_message=%s", recipient_email, type(exc).__name__, str(exc))
+        return False, f"Unexpected Resend error: {str(exc).strip() or type(exc).__name__}", None
+
+    if not 200 <= response.status_code < 300:
+        response_body = response.text.strip() or "Empty response body"
+        error = f"Resend API error ({response.status_code}): {response_body}"
+        logger.error("Resend delivery failed recipient=%s status_code=%s response=%s", recipient_email, response.status_code, response_body)
+        return False, error, None
+
+    try:
+        provider_id = response.json().get("id")
+    except ValueError:
+        provider_id = None
+    logger.debug("Email sent through Resend recipient=%s provider_message_id=%s", recipient_email, provider_id)
+    return True, None, provider_id
+
+
+def _send_smtp(recipient_email, subject, plain_text, html_body=None):
+
+    message = EmailMessage()
+    from_email = os.environ["SMTP_FROM_EMAIL"].strip()
+    message["From"] = _from_address()
     message["To"] = recipient_email
     message["Subject"] = subject
     message["Message-ID"] = make_msgid(domain=from_email.split("@")[-1])
@@ -96,3 +147,13 @@ def send_email(recipient_email, subject, plain_text, html_body=None):
         return _failure(recipient_email, e, "SMTP network error")
     except Exception as e:
         return _failure(recipient_email, e, "Unexpected SMTP error")
+
+
+def send_email(recipient_email, subject, plain_text, html_body=None):
+    """Send one email with the selected provider and return its delivery result."""
+    config_error = configuration_error()
+    if config_error:
+        return False, config_error, None
+    if os.getenv("EMAIL_PROVIDER", "smtp").strip().lower() == "resend":
+        return _send_resend(recipient_email, subject, plain_text, html_body)
+    return _send_smtp(recipient_email, subject, plain_text, html_body)
