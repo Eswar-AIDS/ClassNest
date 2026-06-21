@@ -63,15 +63,21 @@ function AttachmentRow({ materialId, attachment, teacher, onDelete }) {
     if (attachment.file_type !== 'image') return
     let objectUrl
     api.get(endpoint, { responseType: 'blob' }).then(response => {
-      objectUrl = URL.createObjectURL(response.data)
+      // Use content-type from response headers, fallback to attachment mime_type
+      const contentType = response.headers['content-type'] || attachment.mime_type || 'image/jpeg'
+      const blob = new Blob([response.data], { type: contentType })
+      objectUrl = URL.createObjectURL(blob)
       setThumbnail(objectUrl)
     })
     return () => { if (objectUrl) URL.revokeObjectURL(objectUrl) }
-  }, [attachment.file_type, endpoint])
+  }, [attachment.file_type, endpoint, attachment.mime_type])
 
   const openOrDownload = async () => {
     const response = await api.get(endpoint, { responseType: 'blob' })
-    const objectUrl = URL.createObjectURL(response.data)
+    // Use content-type from response headers, fallback to attachment mime_type, then default
+    const contentType = response.headers['content-type'] || attachment.mime_type || 'application/octet-stream'
+    const blob = new Blob([response.data], { type: contentType })
+    const objectUrl = URL.createObjectURL(blob)
     if (openable) {
       window.open(objectUrl, '_blank', 'noopener,noreferrer')
       setTimeout(() => URL.revokeObjectURL(objectUrl), 60000)

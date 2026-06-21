@@ -132,7 +132,12 @@ async def upload_material_attachment(upload: UploadFile, material_id: int) -> mo
             safe_filename = _make_storage_path_safe(file_name)
             storage_path = f"materials/{material_id}/{uuid4().hex}_{safe_filename}"
             
-            supabase.storage.from_(SUPABASE_BUCKET).upload(storage_path, file_bytes)
+            # Upload with content-type metadata for proper MIME type handling
+            supabase.storage.from_(SUPABASE_BUCKET).upload(
+                storage_path,
+                file_bytes,
+                file_options={"content-type": mime_type}
+            )
             
             # For backward compatibility, set file_path to storage_path
             # This way older code that reads file_path will work
@@ -206,16 +211,21 @@ async def _download_from_supabase(attachment: models.MaterialAttachment):
                 attachment.storage_path,
                 expires_in=300  # 5 minutes
             )
-            # Return redirect to signed URL
+            # Return redirect to signed URL (Supabase includes content-type from metadata)
             from fastapi.responses import RedirectResponse
             return RedirectResponse(url=url["signedURL"])
         except Exception:
             # If signed URL fails, download bytes and stream
             response = supabase.storage.from_(SUPABASE_BUCKET).download(attachment.storage_path)
+            # Use inline for PDFs/images so they open in browser, attachment for others to force download
+            disposition = "inline" if attachment.file_type in ("pdf", "image") else "attachment"
             return StreamingResponse(
                 iter([response]),
                 media_type=attachment.mime_type,
-                headers={"Content-Disposition": f'attachment; filename="{attachment.file_name}"'},
+                headers={
+                    "Content-Disposition": f'{disposition}; filename="{attachment.file_name}"',
+                    "X-Content-Type-Options": "nosniff",
+                },
             )
     except Exception as e:
         raise HTTPException(500, f"Failed to download file from Supabase Storage: {str(e)}")
@@ -248,11 +258,14 @@ async def _download_from_local(attachment: models.MaterialAttachment):
             while chunk := await f.read(CHUNK_SIZE):
                 yield chunk
     
+    # Use inline for PDFs/images so they open in browser, attachment for others to force download
+    disposition = "inline" if attachment.file_type in ("pdf", "image") else "attachment"
+    
     return StreamingResponse(
         file_generator(),
         media_type=attachment.mime_type,
         headers={
-            "Content-Disposition": f'attachment; filename="{attachment.file_name}"',
+            "Content-Disposition": f'{disposition}; filename="{attachment.file_name}"',
             "X-Content-Type-Options": "nosniff",
         },
     )
