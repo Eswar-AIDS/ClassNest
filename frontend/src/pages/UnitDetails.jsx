@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { ArrowLeft, Plus } from 'lucide-react'
-import api, { errorMessage } from '../api/axios'
+import { ArrowLeft, Plus, Trash2 } from 'lucide-react'
+import api, { errorMessage, getOnce } from '../api/axios'
 import MaterialCard from '../components/MaterialCard'
 import TestCard from '../components/TestCard'
 import AssessmentCard from '../components/AssessmentCard'
+import { UnitPageSkeleton } from '../components/LoadingSkeletons'
 
 export default function UnitDetails() {
   const { unitId } = useParams()
@@ -14,21 +15,30 @@ export default function UnitDetails() {
   const [tests, setTests] = useState([])
   const [assessments, setAssessments] = useState([])
   const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
+  const [pendingAssessmentDelete, setPendingAssessmentDelete] = useState(null)
+  const [deletingAssessment, setDeletingAssessment] = useState(false)
 
   useEffect(() => {
-    api.get(`/units/${unitId}`).then(async response => {
+    let active = true
+    getOnce(`/units/${unitId}`).then(async response => {
+      if (!active) return
       setUnit(response.data)
       const [classroomResponse, materialsResponse, testsResponse, assessmentsResponse] = await Promise.all([
-        api.get(`/classrooms/${response.data.classroom_id}`),
-        api.get(`/units/${unitId}/materials`),
-        api.get(`/units/${unitId}/tests`),
-        api.get(`/units/${unitId}/assessments`),
+        getOnce(`/classrooms/${response.data.classroom_id}`),
+        getOnce(`/units/${unitId}/materials`),
+        getOnce(`/units/${unitId}/tests`),
+        getOnce(`/units/${unitId}/assessments`),
       ])
+      if (!active) return
       setRoom(classroomResponse.data)
       setMaterials(materialsResponse.data)
       setTests(testsResponse.data)
       setAssessments(assessmentsResponse.data)
+    }).catch(err => {
+      if (active) setError(errorMessage(err))
     })
+    return () => { active = false }
   }, [unitId])
 
   const deleteMaterial = async material => {
@@ -39,16 +49,24 @@ export default function UnitDetails() {
     } catch (err) { setError(errorMessage(err)) }
   }
 
-  const deleteAssessment = async assessment => {
-    if (!window.confirm('Are you sure you want to archive/delete this assessment?')) return
+  const deleteAssessment = async () => {
+    if (!pendingAssessmentDelete) return
+    setDeletingAssessment(true)
+    setError('')
+    setNotice('')
     try {
-      const response = await api.delete(`/assessments/${assessment.id}`)
-      if (response.data.archived) setAssessments(current => current.map(item => item.id === assessment.id ? { ...item, archived: true, is_published: false, is_accepting_responses: false } : item))
-      else setAssessments(current => current.filter(item => item.id !== assessment.id))
-    } catch (err) { setError(errorMessage(err)) }
+      await api.delete(`/assessments/${pendingAssessmentDelete.id}`)
+      setAssessments(current => current.filter(item => item.id !== pendingAssessmentDelete.id))
+      setPendingAssessmentDelete(null)
+      setNotice('Assessment deleted.')
+    } catch (err) {
+      setError(errorMessage(err))
+    } finally {
+      setDeletingAssessment(false)
+    }
   }
 
-  if (!unit || !room) return <div className="h-56 animate-pulse rounded-2xl bg-slate-200/60" />
+  if (!unit || !room) return <UnitPageSkeleton />
   const teacher = room.role === 'teacher'
 
   return <>
@@ -58,7 +76,23 @@ export default function UnitDetails() {
       <h1 className="page-title mt-2">{unit.title}</h1>
       <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-500 sm:text-base">{unit.description}</p>
     </header>
+    {notice && <p className="mt-5 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm font-semibold text-emerald-800">{notice}</p>}
     {error && <p className="mt-5 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</p>}
+    {pendingAssessmentDelete && <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/40 p-4">
+      <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-lift">
+        <div className="flex items-start gap-3">
+          <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-red-50 text-red-700"><Trash2 size={19} /></span>
+          <div>
+            <h2 className="text-lg font-bold text-slate-950">Delete this assessment permanently?</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-600">This will remove the assessment, questions, answer key, attempts, responses, evaluation records, and result records. This action cannot be undone.</p>
+          </div>
+        </div>
+        <div className="mt-6 flex flex-wrap justify-end gap-2">
+          <button type="button" className="btn-secondary" disabled={deletingAssessment} onClick={() => setPendingAssessmentDelete(null)}>Cancel</button>
+          <button type="button" className="btn-primary bg-red-600 hover:bg-red-700" disabled={deletingAssessment} onClick={deleteAssessment}>{deletingAssessment ? 'Deleting...' : 'Delete permanently'}</button>
+        </div>
+      </div>
+    </div>}
 
     <div className="mt-8 grid gap-9 lg:grid-cols-2 lg:gap-8">
       <ContentSection title="Learning materials" description="Notes and resources for this unit." action={teacher && <Link className="btn-secondary" to={`/units/${unitId}/materials/new`}><Plus size={15} />Add material</Link>}>
@@ -66,7 +100,7 @@ export default function UnitDetails() {
         {!materials.length && <div className="empty-state">No learning materials yet.</div>}
       </ContentSection>
       <ContentSection title="Assessments" description="Teacher-controlled assessments and legacy tests." action={teacher && <Link className="btn-secondary" to={`/units/${unitId}/assessments/new`}><Plus size={15} />Create assessment</Link>}>
-        {assessments.map(assessment => <AssessmentCard key={assessment.id} assessment={assessment} teacher={teacher} classId={room.id} unitId={unitId} onDelete={deleteAssessment} />)}
+        {assessments.map(assessment => <AssessmentCard key={assessment.id} assessment={assessment} teacher={teacher} classId={room.id} unitId={unitId} onDelete={setPendingAssessmentDelete} />)}
         {tests.map(test => <TestCard key={test.id} test={test} />)}
         {!tests.length && !assessments.length && <div className="empty-state">No assessments available.</div>}
       </ContentSection>

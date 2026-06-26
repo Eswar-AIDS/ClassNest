@@ -3,7 +3,8 @@ import { Link, useParams } from 'react-router-dom'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { ArrowLeft, Download, ExternalLink, File, FileImage, FileSpreadsheet, FileText, Trash2 } from 'lucide-react'
-import api, { errorMessage } from '../api/axios'
+import api, { errorMessage, getOnce } from '../api/axios'
+import { PageSkeleton } from '../components/common/Loading'
 
 export default function MaterialReader() {
   const { materialId } = useParams()
@@ -12,10 +13,10 @@ export default function MaterialReader() {
   const [error, setError] = useState('')
 
   useEffect(() => {
-    api.get(`/materials/${materialId}`).then(async response => {
+    getOnce(`/materials/${materialId}`).then(async response => {
       setItem(response.data)
-      const unit = await api.get(`/units/${response.data.unit_id}`)
-      const classroom = await api.get(`/classrooms/${unit.data.classroom_id}`)
+      const unit = await getOnce(`/units/${response.data.unit_id}`)
+      const classroom = await getOnce(`/classrooms/${unit.data.classroom_id}`)
       setRole(classroom.data.role)
     }).catch(err => setError(errorMessage(err)))
   }, [materialId])
@@ -31,7 +32,7 @@ export default function MaterialReader() {
   }
 
   if (error && !item) return <div className="mx-auto max-w-4xl rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>
-  if (!item) return <div className="mx-auto h-72 max-w-4xl animate-pulse rounded-2xl bg-slate-200/60" />
+  if (!item) return <div className="mx-auto max-w-[900px]"><PageSkeleton cards={2} /></div>
 
   return <div className="mx-auto max-w-[900px]">
     <Link to={`/units/${item.unit_id}`} className="back-link"><ArrowLeft size={16} />Back to unit</Link>

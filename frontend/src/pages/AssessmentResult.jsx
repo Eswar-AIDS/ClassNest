@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { AlertTriangle, ArrowLeft, CheckCircle2, CircleMinus, Clock3, XCircle } from 'lucide-react'
-import api, { errorMessage } from '../api/axios'
+import { errorMessage, getOnce } from '../api/axios'
+import { PageSkeleton } from '../components/common/Loading'
 
 function studentAnswer(response) {
   return response.selected_option || response.text_answer || response.code_answer || ''
@@ -111,7 +112,7 @@ export default function AssessmentResult() {
   const [error, setError] = useState('')
 
   useEffect(() => {
-    api.get(`/assessments/${assessmentId}/my-result`)
+    getOnce(`/assessments/${assessmentId}/my-result`)
       .then(response => {
         if (response.data.status === 'published') setResult(response.data)
         else setPending(response.data)
@@ -132,7 +133,7 @@ export default function AssessmentResult() {
   }
 
   if (error) return <p className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</p>
-  if (!result) return <div className="h-72 animate-pulse rounded-2xl bg-slate-200/60" />
+  if (!result) return <PageSkeleton cards={4} />
 
   const percentage = result.total_marks ? Math.round(result.score / result.total_marks * 100) : 0
   const counts = result.responses.reduce((summary, response) => {

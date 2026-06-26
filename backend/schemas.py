@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Literal, Optional
+from typing import Any, Literal, Optional
 from pydantic import AnyHttpUrl, BaseModel, ConfigDict, EmailStr, Field, model_validator
 
 
@@ -317,6 +317,7 @@ class AssessmentOut(BaseModel):
 
 class AssessmentStudentOut(AssessmentOut):
     questions: list[AssessmentQuestionOut]
+    attempt_id: Optional[int] = None
     attempt_status: Optional[str] = None
     attempt_started_at: Optional[datetime] = None
     attempt_expires_at: Optional[datetime] = None
@@ -358,6 +359,10 @@ class AssessmentSubmitInput(BaseModel):
         return self
 
 
+class AssessmentAutoSubmitInput(AssessmentSubmitInput):
+    auto_submit_reason: Literal["browser_back", "refresh", "tab_close", "route_leave"] = "route_leave"
+
+
 class CodingRunInput(BaseModel):
     question_id: int
     code: str = Field(min_length=1, max_length=50000)
@@ -387,6 +392,52 @@ class AssessmentSubmissionOut(BaseModel):
     attempt_id: int
     status: str
     message: str
+
+
+class AssessmentAttemptStartOut(BaseModel):
+    can_start: bool
+    attempt_id: Optional[int] = None
+    status: Optional[str] = None
+    message: str
+    assessment: Optional[AssessmentStudentOut] = None
+
+
+AssessmentAttemptEventType = Literal[
+    "assessment_started",
+    "assessment_submitted",
+    "auto_submitted_on_leave",
+    "left_assessment_page",
+    "fullscreen_enabled",
+    "fullscreen_failed",
+    "fullscreen_exit",
+    "tab_hidden",
+    "window_blur",
+    "returned_to_assessment",
+    "copy_attempt",
+    "paste_attempt",
+    "cut_attempt",
+    "right_click",
+    "blocked_shortcut",
+    "before_unload",
+    "auto_submit_on_leave",
+]
+
+
+class AssessmentAttemptEventCreate(BaseModel):
+    event_type: AssessmentAttemptEventType
+    event_message: str = Field(min_length=1, max_length=500)
+    metadata: Optional[dict[str, Any]] = None
+
+
+class AssessmentAttemptEventOut(BaseModel):
+    id: int
+    attempt_id: int
+    student_id: int
+    assessment_id: int
+    event_type: str
+    event_message: str
+    metadata: Optional[dict[str, Any]] = None
+    created_at: datetime
 
 
 class AssessmentTeacherResponseOut(BaseModel):
@@ -429,6 +480,10 @@ class AssessmentAttemptOut(BaseModel):
     submitted_at: Optional[datetime]
     evaluated_at: Optional[datetime]
     published_at: Optional[datetime]
+    auto_submit_reason: Optional[str] = None
+    warning_count: int = 0
+    last_warning_at: Optional[datetime] = None
+    focus_status: Literal["clean", "warnings", "suspicious"] = "clean"
     responses: list[AssessmentTeacherResponseOut]
 
 

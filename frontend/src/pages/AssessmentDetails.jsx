@@ -1,29 +1,44 @@
 import { useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
-import { BarChart3, Clock, FileQuestion, Play, ShieldCheck } from 'lucide-react'
-import api, { errorMessage } from '../api/axios'
+import { Link, useNavigate, useParams } from 'react-router-dom'
+import { ArrowLeft, BarChart3, Clock, FileQuestion, Play, ShieldCheck } from 'lucide-react'
+import { errorMessage, getOnce } from '../api/axios'
+import { AssessmentPageSkeleton } from '../components/LoadingSkeletons'
 
 export default function AssessmentDetails() {
   const { assessmentId } = useParams()
+  const navigate = useNavigate()
   const [assessment, setAssessment] = useState(null)
   const [role, setRole] = useState(null)
+  const [unitId, setUnitId] = useState(null)
   const [error, setError] = useState('')
   const [now] = useState(() => Date.now())
 
   useEffect(() => {
-    api.get(`/assessments/${assessmentId}`).then(async response => {
+    let active = true
+    getOnce(`/assessments/${assessmentId}`).then(async response => {
+      if (!active) return
       setAssessment(response.data)
-      const unit = await api.get(`/units/${response.data.unit_id}`)
-      const classroom = await api.get(`/classrooms/${unit.data.classroom_id}`)
+      const unit = await getOnce(`/units/${response.data.unit_id}`)
+      const classroom = await getOnce(`/classrooms/${unit.data.classroom_id}`)
+      if (!active) return
+      setUnitId(unit.data.id)
       setRole(classroom.data.role)
-    }).catch(err => setError(errorMessage(err)))
+    }).catch(err => {
+      if (active) setError(errorMessage(err))
+    })
+    return () => { active = false }
   }, [assessmentId])
 
   if (error) return <p className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</p>
-  if (!assessment || !role) return <div className="mx-auto h-72 max-w-3xl animate-pulse rounded-2xl bg-slate-200/60" />
+  if (!assessment || !role) return <AssessmentPageSkeleton />
+
+  const handleBack = () => {
+    if (window.history.length > 1) navigate(-1)
+    else navigate(unitId ? `/units/${unitId}` : '/dashboard')
+  }
 
   const status = assessment.results_published ? 'Results published' : assessment.is_accepting_responses ? 'Open' : assessment.is_published ? 'Closed' : 'Draft'
-  return <div className="mx-auto max-w-3xl"><section className="card overflow-hidden"><div className="p-6 sm:p-8"><div className="flex flex-wrap items-center justify-between gap-3"><span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-bold uppercase text-slate-600">{status}</span><span className="inline-flex items-center gap-1.5 text-xs text-slate-500"><ShieldCheck size={15} />Teacher-controlled evaluation</span></div><h1 className="mt-5 text-3xl font-bold tracking-tight text-slate-950">{assessment.title}</h1><p className="mt-3 text-sm leading-6 text-slate-500">{assessment.description || 'Review the assessment details before continuing.'}</p><div className="mt-7 grid grid-cols-2 divide-x rounded-xl border border-slate-200 bg-slate-50"><div className="flex items-center gap-3 p-4"><Clock size={18} className="text-slate-500" /><div><p className="text-xs text-slate-500">Timing</p><p className="text-sm font-bold">{timingLabel(assessment)}</p></div></div><div className="flex items-center gap-3 p-4"><FileQuestion size={18} className="text-slate-500" /><div><p className="text-xs text-slate-500">Questions</p><p className="text-sm font-bold">{assessment.question_count}</p></div></div></div></div>
+  return <div className="mx-auto max-w-3xl"><button type="button" onClick={handleBack} className="back-link mb-4"><ArrowLeft size={16} />Back to unit</button><section className="card overflow-hidden"><div className="p-6 sm:p-8"><div className="flex flex-wrap items-center justify-between gap-3"><span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-bold uppercase text-slate-600">{status}</span><span className="inline-flex items-center gap-1.5 text-xs text-slate-500"><ShieldCheck size={15} />Teacher-controlled evaluation</span></div><h1 className="mt-5 text-3xl font-bold tracking-tight text-slate-950">{assessment.title}</h1><p className="mt-3 text-sm leading-6 text-slate-500">{assessment.description || 'Review the assessment details before continuing.'}</p><div className="mt-7 grid grid-cols-2 divide-x rounded-xl border border-slate-200 bg-slate-50"><div className="flex items-center gap-3 p-4"><Clock size={18} className="text-slate-500" /><div><p className="text-xs text-slate-500">Timing</p><p className="text-sm font-bold">{timingLabel(assessment)}</p></div></div><div className="flex items-center gap-3 p-4"><FileQuestion size={18} className="text-slate-500" /><div><p className="text-xs text-slate-500">Questions</p><p className="text-sm font-bold">{assessment.question_count}</p></div></div></div></div>
       <div className="border-t border-slate-200 bg-slate-50 px-6 py-4 sm:px-8">
         {role === 'teacher' && <Link className="btn-primary" to={`/assessments/${assessment.id}/dashboard`}><BarChart3 size={16} />Assessment dashboard</Link>}
         {role === 'student' && <StudentAction assessment={assessment} now={now} />}

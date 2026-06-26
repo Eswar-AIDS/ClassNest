@@ -1,20 +1,29 @@
 import { useEffect, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { LogIn, Plus } from 'lucide-react'
-import api from '../api/axios'
+import { cacheKeys, getOnce, readSessionCache, writeSessionCache } from '../api/axios'
 import { useAuth } from '../context/AuthContext'
 import ClassCard from '../components/ClassCard'
+import { DashboardContentSkeleton } from '../components/LoadingSkeletons'
 
 export default function Dashboard() {
-  const [data, setData] = useState({ teaching: [], learning: [] })
-  const [loading, setLoading] = useState(true)
+  const [data, setData] = useState(() => readSessionCache(cacheKeys.dashboardClasses) || { teaching: [], learning: [] })
+  const [loading, setLoading] = useState(() => !readSessionCache(cacheKeys.dashboardClasses))
   const { user } = useAuth()
   const location = useLocation()
   const navigate = useNavigate()
   const notice = location.state?.notice || ''
 
   useEffect(() => {
-    api.get('/classrooms').then(response => setData(response.data)).finally(() => setLoading(false))
+    let active = true
+    getOnce('/classrooms').then(response => {
+      if (!active) return
+      setData(response.data)
+      writeSessionCache(cacheKeys.dashboardClasses, response.data)
+    }).finally(() => {
+      if (active) setLoading(false)
+    })
+    return () => { active = false }
   }, [])
   useEffect(() => {
     if (!notice) return
@@ -34,7 +43,7 @@ export default function Dashboard() {
       </div>
     </div>
     {notice && <p className="mt-5 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm font-semibold text-emerald-800">{notice}</p>}
-    {loading ? <div className="mt-10 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{[1, 2, 3].map(item => <div key={item} className="h-56 animate-pulse rounded-2xl bg-slate-200/60" />)}</div> : <div className="mt-8 space-y-11">
+    {loading ? <DashboardContentSkeleton /> : <div className="mt-8 space-y-11">
       <ClassSection title="Teaching" description="Classes where you are a teacher." rooms={data.teaching} empty="You aren't teaching any classes yet. Create a classroom to begin." />
       <ClassSection title="Learning" description="Classes where you are a student." rooms={data.learning} empty="You aren't learning in any classes yet. Join with a class code or invite link." />
     </div>}

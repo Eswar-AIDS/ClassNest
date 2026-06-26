@@ -2,6 +2,8 @@ import { lazy, Suspense } from 'react'
 import { Route, Routes } from 'react-router-dom'
 import ProtectedRoute from './components/ProtectedRoute'
 import Layout from './components/Layout'
+import ServerWakeNotice from './components/ServerWakeNotice'
+import { FullPageLoader } from './components/common/Loading'
 import Login from './pages/Login'
 import Register from './pages/Register'
 import Dashboard from './pages/Dashboard'
@@ -34,7 +36,9 @@ const EditAssessment = lazy(() => import('./pages/EditAssessment'))
 const EmailNotificationPage = lazy(() => import('./pages/EmailNotificationPage'))
 
 export default function App() {
-  return <Suspense fallback={<div className="grid min-h-screen place-items-center text-sm text-slate-500">Loading ClassNest…</div>}><Routes>
+  return <>
+    <ServerWakeNotice />
+    <Suspense fallback={<FullPageLoader />}><Routes>
     <Route path="/login" element={<Login />} />
     <Route path="/register" element={<Register />} />
     <Route element={<ProtectedRoute />}>
@@ -72,5 +76,6 @@ export default function App() {
       </Route>
     </Route>
     <Route path="*" element={<div className="grid min-h-screen place-items-center"><a href="/" className="text-brand-600">Return to ClassNest</a></div>} />
-  </Routes></Suspense>
+    </Routes></Suspense>
+  </>
 }

@@ -1,2 +1,23 @@
-import { BookOpen } from 'lucide-react';
-export default function AuthShell({title,subtitle,children,footer}){return <main className="grid min-h-screen bg-white lg:grid-cols-2"><section className="flex items-center justify-center p-6"><div className="w-full max-w-md"><div className="mb-10 flex items-center gap-2 text-xl font-bold"><span className="grid size-10 place-items-center rounded-xl bg-brand-600 text-white"><BookOpen size={21}/></span>ClassNest</div><h1 className="text-3xl font-bold tracking-tight">{title}</h1><p className="mt-2 text-slate-500">{subtitle}</p><div className="mt-8">{children}</div><div className="mt-6 text-center text-sm text-slate-500">{footer}</div></div></section><aside className="relative hidden overflow-hidden bg-ink p-16 text-white lg:flex lg:flex-col lg:justify-end"><div className="absolute -right-24 -top-24 size-96 rounded-full bg-brand-500/20"/><div className="absolute left-20 top-32 size-48 rounded-full bg-violet-500/10"/><p className="relative max-w-lg text-4xl font-bold leading-tight">A calmer place to teach, learn, and keep the whole class moving.</p><p className="relative mt-5 max-w-md text-lg leading-7 text-slate-300">Organize lessons, share materials, run assessments, and understand progress in one focused workspace.</p></aside></main>}
+import { BookOpen, GraduationCap } from 'lucide-react'
+
+export default function AuthShell({ title, subtitle, children, footer }) {
+  return <main className="auth-page">
+    <div className="auth-glow auth-glow-blue" />
+    <div className="auth-glow auth-glow-green" />
+    <section className="auth-card" aria-labelledby="auth-title">
+      <div className="flex flex-col items-center text-center">
+        <div className="auth-logo">
+          <BookOpen size={22} aria-hidden="true" />
+        </div>
+        <div className="mt-4 flex items-center gap-2 text-sm font-bold text-brand-700">
+          <GraduationCap size={16} aria-hidden="true" />
+          <span>ClassNest</span>
+        </div>
+        <h1 id="auth-title" className="mt-5 text-3xl font-bold tracking-tight text-slate-950 sm:text-4xl">{title}</h1>
+        <p className="mt-2 max-w-sm text-sm leading-6 text-slate-500">{subtitle}</p>
+      </div>
+      <div className="mt-8">{children}</div>
+      <div className="mt-6 text-center text-sm text-slate-500">{footer}</div>
+    </section>
+  </main>
+}

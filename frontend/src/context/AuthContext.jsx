@@ -1,27 +1,28 @@
 import { createContext, useContext, useEffect, useState } from 'react'
-import api from '../api/axios'
+import api, { cacheKeys, getOnce, readSessionCache, removeSessionCache, writeSessionCache } from '../api/axios'
 
 const AuthContext = createContext(null)
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null)
-  const [loading, setLoading] = useState(true)
+  const hasToken = Boolean(localStorage.getItem('classnest_token'))
+  const [user, setUser] = useState(() => hasToken ? readSessionCache(cacheKeys.authMe) : null)
+  const [loading, setLoading] = useState(() => hasToken && !readSessionCache(cacheKeys.authMe))
 
   const refresh = async () => {
     try {
-      setUser((await api.get('/auth/me')).data)
+      const nextUser = (await getOnce('/auth/me')).data
+      setUser(nextUser)
+      writeSessionCache(cacheKeys.authMe, nextUser)
     } catch {
       setUser(null)
+      removeSessionCache(cacheKeys.authMe)
     } finally {
       setLoading(false)
     }
   }
 
   useEffect(() => {
-    api.get('/auth/me')
-      .then(response => setUser(response.data))
-      .catch(() => setUser(null))
-      .finally(() => setLoading(false))
+    if (localStorage.getItem('classnest_token')) queueMicrotask(refresh)
   }, [])
 
   const authenticate = async (path, data) => {
@@ -32,6 +33,8 @@ export function AuthProvider({ children }) {
 
   const logout = () => {
     localStorage.removeItem('classnest_token')
+    removeSessionCache(cacheKeys.authMe)
+    removeSessionCache(cacheKeys.dashboardClasses)
     setUser(null)
   }
 

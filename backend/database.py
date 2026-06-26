@@ -80,11 +80,124 @@ def ensure_assessment_attempt_columns():
     if "assessment_attempts" not in inspector.get_table_names():
         return
     columns = {column["name"] for column in inspector.get_columns("assessment_attempts")}
+    boolean_default = "FALSE" if DATABASE_URL.startswith("postgresql") else "0"
     with engine.begin() as connection:
+        if "status" not in columns:
+            connection.execute(text("ALTER TABLE assessment_attempts ADD COLUMN status VARCHAR(30) NOT NULL DEFAULT 'not_started'"))
         if "started_at" not in columns:
             connection.execute(text("ALTER TABLE assessment_attempts ADD COLUMN started_at DATETIME"))
         if "expires_at" not in columns:
             connection.execute(text("ALTER TABLE assessment_attempts ADD COLUMN expires_at DATETIME"))
+        if "submitted_at" not in columns:
+            connection.execute(text("ALTER TABLE assessment_attempts ADD COLUMN submitted_at DATETIME"))
+        if "auto_submit_reason" not in columns:
+            connection.execute(text("ALTER TABLE assessment_attempts ADD COLUMN auto_submit_reason TEXT"))
+        if "last_activity_at" not in columns:
+            connection.execute(text("ALTER TABLE assessment_attempts ADD COLUMN last_activity_at DATETIME"))
+        if "ended_at" not in columns:
+            connection.execute(text("ALTER TABLE assessment_attempts ADD COLUMN ended_at DATETIME"))
+        if "started_email_sent" not in columns:
+            connection.execute(text(f"ALTER TABLE assessment_attempts ADD COLUMN started_email_sent BOOLEAN NOT NULL DEFAULT {boolean_default}"))
+        if "submitted_email_sent" not in columns:
+            connection.execute(text(f"ALTER TABLE assessment_attempts ADD COLUMN submitted_email_sent BOOLEAN NOT NULL DEFAULT {boolean_default}"))
+        if "left_email_sent" not in columns:
+            connection.execute(text(f"ALTER TABLE assessment_attempts ADD COLUMN left_email_sent BOOLEAN NOT NULL DEFAULT {boolean_default}"))
+
+
+def ensure_assessment_attempt_events_table():
+    """Create focus-mode event log table for existing databases."""
+    inspector = inspect(engine)
+    postgres = DATABASE_URL.startswith("postgresql")
+    id_type = "SERIAL PRIMARY KEY" if postgres else "INTEGER PRIMARY KEY"
+    metadata_type = "JSONB" if postgres else "JSON"
+    timestamp_type = "TIMESTAMP" if postgres else "DATETIME"
+    with engine.begin() as connection:
+        if "assessment_attempt_events" not in inspector.get_table_names():
+            connection.execute(text(f"""
+                CREATE TABLE assessment_attempt_events (
+                    id {id_type},
+                    attempt_id INTEGER NOT NULL,
+                    student_id INTEGER NOT NULL,
+                    assessment_id INTEGER NOT NULL,
+                    event_type VARCHAR(40) NOT NULL,
+                    event_message TEXT NOT NULL,
+                    event_metadata {metadata_type},
+                    created_at {timestamp_type} NOT NULL,
+                    FOREIGN KEY(attempt_id) REFERENCES assessment_attempts(id) ON DELETE CASCADE,
+                    FOREIGN KEY(student_id) REFERENCES users(id),
+                    FOREIGN KEY(assessment_id) REFERENCES assessments(id) ON DELETE CASCADE
+                )
+            """))
+            connection.execute(text("CREATE INDEX ix_assessment_attempt_events_attempt_id ON assessment_attempt_events (attempt_id)"))
+            connection.execute(text("CREATE INDEX ix_assessment_attempt_events_student_id ON assessment_attempt_events (student_id)"))
+            connection.execute(text("CREATE INDEX ix_assessment_attempt_events_assessment_id ON assessment_attempt_events (assessment_id)"))
+            connection.execute(text("CREATE INDEX ix_assessment_attempt_events_created_at ON assessment_attempt_events (created_at)"))
+        if postgres:
+            connection.execute(text("ALTER TABLE assessment_attempt_events ENABLE ROW LEVEL SECURITY"))
+
+
+def ensure_assessment_cascade_constraints():
+    """Ensure existing PostgreSQL assessment child tables cascade at the database layer."""
+    if not DATABASE_URL.startswith("postgresql"):
+        return
+    inspector = inspect(engine)
+    tables = set(inspector.get_table_names())
+    required = [
+        ("assessment_questions", "assessment_id", "assessments", "id"),
+        ("assessment_answer_keys", "question_id", "assessment_questions", "id"),
+        ("assessment_attempts", "assessment_id", "assessments", "id"),
+        ("assessment_responses", "attempt_id", "assessment_attempts", "id"),
+        ("assessment_responses", "question_id", "assessment_questions", "id"),
+        ("assessment_attempt_events", "attempt_id", "assessment_attempts", "id"),
+        ("assessment_attempt_events", "assessment_id", "assessments", "id"),
+    ]
+    with engine.begin() as connection:
+        for table, column, referred_table, referred_column in required:
+            if table not in tables or referred_table not in tables:
+                continue
+            constraint = connection.execute(text("""
+                SELECT c.conname, c.confdeltype
+                FROM pg_constraint c
+                JOIN pg_class t ON t.oid = c.conrelid
+                JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = ANY(c.conkey)
+                JOIN pg_class rt ON rt.oid = c.confrelid
+                WHERE c.contype = 'f'
+                  AND t.relname = :table
+                  AND a.attname = :column
+                  AND rt.relname = :referred_table
+                LIMIT 1
+            """), {"table": table, "column": column, "referred_table": referred_table}).mappings().first()
+            if constraint and constraint["confdeltype"] == "c":
+                continue
+            if constraint:
+                connection.execute(text(f'ALTER TABLE {table} DROP CONSTRAINT {constraint["conname"]}'))
+            connection.execute(text(f"""
+                ALTER TABLE {table}
+                ADD CONSTRAINT fk_{table}_{column}_cascade
+                FOREIGN KEY ({column}) REFERENCES {referred_table}({referred_column}) ON DELETE CASCADE
+            """))
+        if "email_notifications" in tables:
+            constraint = connection.execute(text("""
+                SELECT c.conname, c.confdeltype
+                FROM pg_constraint c
+                JOIN pg_class t ON t.oid = c.conrelid
+                JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = ANY(c.conkey)
+                JOIN pg_class rt ON rt.oid = c.confrelid
+                WHERE c.contype = 'f'
+                  AND t.relname = 'email_notifications'
+                  AND a.attname = 'assessment_id'
+                  AND rt.relname = 'assessments'
+                LIMIT 1
+            """)).mappings().first()
+            if constraint and constraint["confdeltype"] != "n":
+                connection.execute(text(f'ALTER TABLE email_notifications DROP CONSTRAINT {constraint["conname"]}'))
+                constraint = None
+            if not constraint:
+                connection.execute(text("""
+                    ALTER TABLE email_notifications
+                    ADD CONSTRAINT fk_email_notifications_assessment_id_set_null
+                    FOREIGN KEY (assessment_id) REFERENCES assessments(id) ON DELETE SET NULL
+                """))
 
 
 def ensure_unit_columns():

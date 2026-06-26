@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { ArrowLeft, Award, BarChart3, BookOpen, ClipboardCheck, FileText, Users } from 'lucide-react'
-import api, { errorMessage } from '../api/axios'
+import { errorMessage, getOnce } from '../api/axios'
+import { PageSkeleton, SectionLoader } from '../components/common/Loading'
 
 const TABS = [
   ['overview', 'Overview'],
@@ -28,9 +29,9 @@ export default function ClassResults() {
 
   useEffect(() => {
     Promise.all([
-      api.get(`/classrooms/${classId}/results/overview`),
-      api.get(`/classrooms/${classId}/results/units`),
-      api.get(`/classrooms/${classId}/members`),
+      getOnce(`/classrooms/${classId}/results/overview`),
+      getOnce(`/classrooms/${classId}/results/units`),
+      getOnce(`/classrooms/${classId}/members`),
     ]).then(([summary, unitRows, classMembers]) => {
       setOverview(summary.data)
       setUnits(unitRows.data)
@@ -41,19 +42,19 @@ export default function ClassResults() {
 
   useEffect(() => {
     if (!unitId) return
-    api.get(`/classrooms/${classId}/results/units/${unitId}`).then(response => {
+    getOnce(`/classrooms/${classId}/results/units/${unitId}`).then(response => {
       setUnitData(response.data)
     }).catch(err => setError(errorMessage(err)))
   }, [classId, unitId])
 
   useEffect(() => {
     if (!assessmentId) return
-    api.get(`/classrooms/${classId}/results/assessments/${assessmentId}`).then(response => setAssessmentData(response.data)).catch(err => setError(errorMessage(err)))
+    getOnce(`/classrooms/${classId}/results/assessments/${assessmentId}`).then(response => setAssessmentData(response.data)).catch(err => setError(errorMessage(err)))
   }, [assessmentId, classId])
 
   useEffect(() => {
     if (!studentId) return
-    api.get(`/classrooms/${classId}/results/students/${studentId}`).then(response => setStudentData(response.data)).catch(err => setError(errorMessage(err)))
+    getOnce(`/classrooms/${classId}/results/students/${studentId}`).then(response => setStudentData(response.data)).catch(err => setError(errorMessage(err)))
   }, [classId, studentId])
 
   const activeUnitData = String(unitData?.unit?.id) === unitId ? unitData : null
@@ -68,7 +69,7 @@ export default function ClassResults() {
   }
 
   if (error && !overview) return <ErrorBox message={error} />
-  if (!overview) return <div className="h-72 animate-pulse rounded-2xl bg-slate-200/60" />
+  if (!overview) return <PageSkeleton actions cards={4} table />
 
   return <div>
     <Link to={`/classes/${classId}`} className="back-link"><ArrowLeft size={17} />Back to class</Link>
@@ -95,9 +96,9 @@ export default function ClassResults() {
     <div className="mt-6 flex gap-1 overflow-x-auto border-b border-slate-200">{TABS.map(([value, label]) => <button key={value} onClick={() => setTab(value)} className={`whitespace-nowrap border-b-2 px-4 py-3 text-sm font-semibold ${tab === value ? 'border-brand-600 text-brand-700' : 'border-transparent text-slate-500 hover:text-slate-800'}`}>{label}</button>)}</div>
 
     {tab === 'overview' && <Overview overview={overview} units={units} chooseUnit={chooseUnit} />}
-    {tab === 'unit' && <UnitPerformance data={activeUnitData} rows={filteredUnitStudents} />}
-    {tab === 'assessment' && <AssessmentPerformance data={activeAssessmentData} rows={filteredAssessmentAttempts} />}
-    {tab === 'student' && <StudentPerformance data={activeStudentData} />}
+    {tab === 'unit' && <UnitPerformance data={activeUnitData} rows={filteredUnitStudents} loading={Boolean(unitId)} />}
+    {tab === 'assessment' && <AssessmentPerformance data={activeAssessmentData} rows={filteredAssessmentAttempts} loading={Boolean(assessmentId)} />}
+    {tab === 'student' && <StudentPerformance data={activeStudentData} loading={Boolean(studentId)} />}
     {tab === 'pending' && <Pending rows={filteredPending} />}
   </div>
 }
@@ -109,20 +110,20 @@ function Overview({ overview, units, chooseUnit }) {
   </div><Panel title="Unit summary"><Table headers={['Unit', 'Assessments', 'Attempts', 'Average', 'Pending', 'Published', '']} rows={units.map(unit => [unit.unit_title, unit.assessment_count, unit.attempt_count, pct(unit.average_percentage), unit.pending_evaluation, unit.published_count, <button key="open" onClick={() => chooseUnit(unit.unit_id)} className="font-semibold text-brand-700">View</button>])} empty="No active units found." /></Panel></div>
 }
 
-function UnitPerformance({ data, rows }) {
-  if (!data) return <Empty>Select a unit to view performance.</Empty>
+function UnitPerformance({ data, rows, loading }) {
+  if (!data) return loading ? <SectionLoader rows={1} /> : <Empty>Select a unit to view performance.</Empty>
   const summary = data.summary
   return <div className="mt-6 space-y-5"><div><h2 className="text-xl font-bold">{data.unit.title}</h2><p className="mt-1 text-sm text-slate-500">Track student performance across assessments in this unit.</p></div><SummaryStrip items={[["Assessments", summary.assessment_count], ["Students Attempted", summary.students_attempted], ["Average", pct(summary.average_percentage)], ["Highest", pct(summary.highest_percentage)], ["Lowest", pct(summary.lowest_percentage)], ["Pending", summary.pending_evaluation], ["Published", summary.published_count]]} /><Panel title="Student performance"><Table headers={['Student', 'Email', 'Attempted', 'Total Score', 'Total Marks', 'Percentage', 'Status', 'Last Submitted']} rows={rows.map(row => [row.student_name, row.student_email, row.assessments_attempted, row.score, row.total_marks, valuePct(row.percentage), <Status key="status" value={row.status} />, formatDate(row.last_submitted)])} empty="No evaluated submissions found for this unit." /></Panel></div>
 }
 
-function AssessmentPerformance({ data, rows }) {
-  if (!data) return <Empty>Select a unit and assessment to view performance.</Empty>
+function AssessmentPerformance({ data, rows, loading }) {
+  if (!data) return loading ? <SectionLoader rows={1} /> : <Empty>Select a unit and assessment to view performance.</Empty>
   const summary = data.summary
   return <div className="mt-6 space-y-5"><div><h2 className="text-xl font-bold">{data.assessment.title}</h2><p className="mt-1 text-sm text-slate-500">Review scores, publish status, and submissions for this assessment. · {data.assessment.unit_title}</p></div><SummaryStrip items={[["Total Marks", data.assessment.total_marks], ["Attempts", summary.attempt_count], ["Class Average", pct(summary.class_average_percentage)], ["Highest", pct(summary.highest_percentage)], ["Lowest", pct(summary.lowest_percentage)], ["Published", summary.published_count], ["Pending", summary.pending_evaluation]]} /><Panel title="Assessment attempts"><Table headers={['Student', 'Email', 'Score', 'Total', 'Percentage', 'Attempt Status', 'Publish Status', 'Submitted', 'Action']} rows={rows.map(row => [row.student_name, row.student_email, row.score ?? '—', row.total_marks, valuePct(row.percentage), <Status key="attempt" value={row.status} />, <Status key="publish" value={row.publish_status} />, formatDate(row.submitted_at), row.attempt_id ? <Link key="action" className="font-semibold text-brand-700" to={`/assessments/${data.assessment.id}/dashboard`}>{row.status === 'pending_evaluation' ? 'Evaluate' : row.status === 'published' ? 'View Published Result' : 'Publish Result'}</Link> : '—'])} empty="No submissions found for this assessment." /></Panel></div>
 }
 
-function StudentPerformance({ data }) {
-  if (!data) return <Empty>Select a student to view performance.</Empty>
+function StudentPerformance({ data, loading }) {
+  if (!data) return loading ? <SectionLoader rows={1} /> : <Empty>Select a student to view performance.</Empty>
   const summary = data.summary
   return <div className="mt-6 space-y-5"><div><h2 className="text-xl font-bold">{data.student.student_name}</h2><p className="mt-1 text-sm text-slate-500">{data.student.student_email} · Joined {formatDate(data.student.joined_at)}</p><p className="mt-2 text-sm text-slate-500">Review one student&apos;s progress across all active units.</p></div><SummaryStrip items={[["Units Attempted", summary.units_attempted], ["Assessments Attempted", summary.assessments_attempted], ["Overall Score", `${summary.score} / ${summary.total_marks}`], ["Overall Percentage", valuePct(summary.percentage)], ["Pending", summary.pending_evaluation], ["Published", summary.published_count]]} /><Panel title="Unit breakdown"><Table headers={['Unit', 'Assessments Attempted', 'Score', 'Total Marks', 'Percentage', 'Status']} rows={data.unit_breakdown.map(row => [row.unit_title, row.assessments_attempted, row.score, row.total_marks, valuePct(row.percentage), <Status key="status" value={row.status} />])} /></Panel><Panel title="Assessment breakdown"><Table headers={['Unit', 'Assessment', 'Score', 'Total Marks', 'Percentage', 'Attempt Status', 'Published Status', 'Submitted']} rows={data.assessment_breakdown.map(row => [row.unit_title, row.assessment_title, row.score ?? '—', row.total_marks, valuePct(row.percentage), <Status key="attempt" value={row.status} />, <Status key="publish" value={row.publish_status} />, formatDate(row.submitted_at)])} /></Panel></div>
 }

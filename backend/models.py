@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, JSON, String, Text, UniqueConstraint
 from sqlalchemy.orm import relationship, validates
 from database import Base
 
@@ -167,8 +167,8 @@ class Assessment(Base):
     created_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     unit = relationship("Unit")
-    questions = relationship("AssessmentQuestion", cascade="all, delete-orphan", back_populates="assessment", order_by="AssessmentQuestion.order_number")
-    attempts = relationship("AssessmentAttempt", cascade="all, delete-orphan", back_populates="assessment")
+    questions = relationship("AssessmentQuestion", cascade="all, delete-orphan", passive_deletes=True, back_populates="assessment", order_by="AssessmentQuestion.order_number")
+    attempts = relationship("AssessmentAttempt", cascade="all, delete-orphan", passive_deletes=True, back_populates="assessment")
 
 
 class AssessmentQuestion(Base):
@@ -191,8 +191,8 @@ class AssessmentQuestion(Base):
     tags = Column(Text, nullable=True)
     order_number = Column(Integer, nullable=False)
     assessment = relationship("Assessment", back_populates="questions")
-    answer_key = relationship("AssessmentAnswerKey", cascade="all, delete-orphan", back_populates="question", uselist=False)
-    responses = relationship("AssessmentResponse", cascade="all, delete-orphan", back_populates="question")
+    answer_key = relationship("AssessmentAnswerKey", cascade="all, delete-orphan", passive_deletes=True, back_populates="question", uselist=False)
+    responses = relationship("AssessmentResponse", cascade="all, delete-orphan", passive_deletes=True, back_populates="question")
 
 
 class AssessmentAnswerKey(Base):
@@ -212,17 +212,24 @@ class AssessmentAttempt(Base):
     id = Column(Integer, primary_key=True)
     assessment_id = Column(Integer, ForeignKey("assessments.id", ondelete="CASCADE"), nullable=False, index=True)
     student_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-    status = Column(String(30), default="pending_evaluation", nullable=False)
+    status = Column(String(30), default="not_started", nullable=False)
     score = Column(Float, default=0, nullable=False)
     total_marks = Column(Float, default=0, nullable=False)
     started_at = Column(DateTime, nullable=True)
     expires_at = Column(DateTime, nullable=True)
     submitted_at = Column(DateTime, nullable=True)
+    ended_at = Column(DateTime, nullable=True)
+    last_activity_at = Column(DateTime, nullable=True)
+    auto_submit_reason = Column(Text, nullable=True)
+    started_email_sent = Column(Boolean, default=False, nullable=False)
+    submitted_email_sent = Column(Boolean, default=False, nullable=False)
+    left_email_sent = Column(Boolean, default=False, nullable=False)
     evaluated_at = Column(DateTime, nullable=True)
     published_at = Column(DateTime, nullable=True)
     assessment = relationship("Assessment", back_populates="attempts")
     student = relationship("User")
-    responses = relationship("AssessmentResponse", cascade="all, delete-orphan", back_populates="attempt")
+    responses = relationship("AssessmentResponse", cascade="all, delete-orphan", passive_deletes=True, back_populates="attempt")
+    events = relationship("AssessmentAttemptEvent", cascade="all, delete-orphan", passive_deletes=True, back_populates="attempt")
 
 
 class AssessmentResponse(Base):
@@ -239,6 +246,21 @@ class AssessmentResponse(Base):
     feedback = Column(Text, nullable=True)
     attempt = relationship("AssessmentAttempt", back_populates="responses")
     question = relationship("AssessmentQuestion", back_populates="responses")
+
+
+class AssessmentAttemptEvent(Base):
+    __tablename__ = "assessment_attempt_events"
+    id = Column(Integer, primary_key=True)
+    attempt_id = Column(Integer, ForeignKey("assessment_attempts.id", ondelete="CASCADE"), nullable=False, index=True)
+    student_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    assessment_id = Column(Integer, ForeignKey("assessments.id", ondelete="CASCADE"), nullable=False, index=True)
+    event_type = Column(String(40), nullable=False)
+    event_message = Column(Text, nullable=False)
+    event_metadata = Column(JSON, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    attempt = relationship("AssessmentAttempt", back_populates="events")
+    student = relationship("User")
+    assessment = relationship("Assessment")
 
 
 class EmailNotification(Base):

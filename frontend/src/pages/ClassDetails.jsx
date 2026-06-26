@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { BarChart3, Copy, Edit3, Link as LinkIcon, Mail, Plus, Settings2, Trash2, Users } from 'lucide-react'
-import api, { errorMessage } from '../api/axios'
+import api, { errorMessage, getOnce } from '../api/axios'
 import UnitCard from '../components/UnitCard'
+import { ClassPageSkeleton } from '../components/LoadingSkeletons'
 
 export default function ClassDetails() {
   const { classId } = useParams()
@@ -16,13 +17,18 @@ export default function ClassDetails() {
   const [deleting, setDeleting] = useState(false)
 
   useEffect(() => {
-    Promise.all([api.get(`/classrooms/${classId}`), api.get(`/classrooms/${classId}/units`)]).then(([classroomResponse, unitsResponse]) => {
+    let active = true
+    Promise.all([getOnce(`/classrooms/${classId}`), getOnce(`/classrooms/${classId}/units`)]).then(([classroomResponse, unitsResponse]) => {
+      if (!active) return
       setRoom(classroomResponse.data)
       setUnits(unitsResponse.data)
-    }).catch(err => setError(errorMessage(err)))
+    }).catch(err => {
+      if (active) setError(errorMessage(err))
+    })
+    return () => { active = false }
   }, [classId])
 
-  if (!room) return <div className="h-72 animate-pulse rounded-2xl bg-slate-200/60" />
+  if (!room) return <ClassPageSkeleton />
 
   const teacher = room.role === 'teacher'
   const inviteUrl = `${window.location.origin}/join/${room.join_code}`

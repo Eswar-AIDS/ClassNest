@@ -73,7 +73,7 @@ def _send_resend(recipient_email, subject, plain_text, html_body=None):
         "to": [recipient_email],
         "subject": subject,
         "text": plain_text,
-        "html": _plain_text_to_html(plain_text),
+        "html": html_body or _plain_text_to_html(plain_text),
     }
 
     try:

@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from database import Base, engine, DB_TYPE, ensure_assessment_attempt_columns, ensure_assessment_columns, ensure_classroom_columns, ensure_material_attachment_columns, ensure_unit_columns, ensure_user_profile_columns
+from database import Base, engine, DB_TYPE, ensure_assessment_attempt_columns, ensure_assessment_attempt_events_table, ensure_assessment_cascade_constraints, ensure_assessment_columns, ensure_classroom_columns, ensure_material_attachment_columns, ensure_unit_columns, ensure_user_profile_columns
 from seed import seed_database
 from routes import assessment_routes, auth_routes, classroom_routes, coding_routes, notification_routes, template_routes, unit_routes, material_routes, test_routes, result_routes, user_routes
 
@@ -18,6 +18,8 @@ async def lifespan(app: FastAPI):
     ensure_user_profile_columns()
     ensure_assessment_columns()
     ensure_assessment_attempt_columns()
+    ensure_assessment_attempt_events_table()
+    ensure_assessment_cascade_constraints()
     ensure_unit_columns()
     ensure_classroom_columns()
     ensure_material_attachment_columns()

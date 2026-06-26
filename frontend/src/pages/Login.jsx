@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { errorMessage } from '../api/axios'
 import AuthShell from './AuthShell'
+import { ButtonLoader } from '../components/common/Loading'
 
 export default function Login() {
   const [form, setForm] = useState({ email: '', password: '' })
@@ -28,12 +29,12 @@ export default function Login() {
     }
   }
 
-  return <AuthShell title="Welcome back" subtitle="Sign in to continue to your classrooms." footer={<>New to ClassNest? <Link className="font-semibold text-brand-600" to="/register" state={{ from: returnTo }}>Create an account</Link></>}>
+  return <AuthShell title="Welcome back" subtitle="Sign in to continue teaching, learning, and keeping every classroom organized." footer={<>New to ClassNest? <Link className="auth-link" to="/register" state={{ from: returnTo }}>Create an account</Link></>}>
     <form onSubmit={submit} className="space-y-5">
-      {error && <p className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>}
-      <label><span className="label">Email address</span><input className="field" type="email" required value={form.email} onChange={event => setForm({ ...form, email: event.target.value })}/></label>
-      <label><span className="label">Password</span><input className="field" type="password" required value={form.password} onChange={event => setForm({ ...form, password: event.target.value })}/></label>
-      <button disabled={busy} className="btn-primary w-full">{busy ? 'Signing in…' : 'Sign in'}</button>
+      {error && <p className="auth-error">{error}</p>}
+      <label><span className="auth-label">Email address</span><input className="auth-field" type="email" required autoComplete="email" value={form.email} onChange={event => setForm({ ...form, email: event.target.value })}/></label>
+      <label><span className="auth-label">Password</span><input className="auth-field" type="password" required autoComplete="current-password" value={form.password} onChange={event => setForm({ ...form, password: event.target.value })}/></label>
+      <button disabled={busy} className="auth-button w-full">{busy ? <ButtonLoader label="Signing in..." /> : 'Sign in'}</button>
     </form>
   </AuthShell>
 }
