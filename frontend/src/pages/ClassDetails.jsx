@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { BarChart3, Copy, Edit3, Link as LinkIcon, Mail, Plus, Settings2, Trash2, Users } from 'lucide-react'
-import api, { errorMessage, getOnce } from '../api/axios'
+import { BarChart3, Code2, Copy, Edit3, Link as LinkIcon, Mail, Plus, Settings2, Trash2, Users } from 'lucide-react'
+import api, { cacheKeys, errorMessage, getOnce, removeSessionCache } from '../api/axios'
 import UnitCard from '../components/UnitCard'
 import { ClassPageSkeleton } from '../components/LoadingSkeletons'
 
@@ -9,6 +9,7 @@ export default function ClassDetails() {
   const { classId } = useParams()
   const navigate = useNavigate()
   const [room, setRoom] = useState(null)
+  const [codespace, setCodespace] = useState(null)
   const [units, setUnits] = useState([])
   const [copied, setCopied] = useState('')
   const [error, setError] = useState('')
@@ -18,10 +19,11 @@ export default function ClassDetails() {
 
   useEffect(() => {
     let active = true
-    Promise.all([getOnce(`/classrooms/${classId}`), getOnce(`/classrooms/${classId}/units`)]).then(([classroomResponse, unitsResponse]) => {
+    Promise.all([getOnce(`/classrooms/${classId}`), getOnce(`/classrooms/${classId}/units`), getOnce(`/classes/${classId}/codespace`)]).then(([classroomResponse, unitsResponse, codespaceResponse]) => {
       if (!active) return
       setRoom(classroomResponse.data)
       setUnits(unitsResponse.data)
+      setCodespace(codespaceResponse.data)
     }).catch(err => {
       if (active) setError(errorMessage(err))
     })
@@ -31,6 +33,7 @@ export default function ClassDetails() {
   if (!room) return <ClassPageSkeleton />
 
   const teacher = room.role === 'teacher'
+  const codespacePath = codespace ? `/codespaces/${codespace.id}` : `/classes/${classId}/codespace`
   const inviteUrl = `${window.location.origin}/join/${room.join_code}`
   const copy = async (value, type) => {
     await navigator.clipboard.writeText(value)
@@ -50,6 +53,7 @@ export default function ClassDetails() {
     setError('')
     try {
       const { data } = await api.delete(`/classrooms/${classId}`)
+      removeSessionCache(cacheKeys.dashboardClasses)
       navigate('/dashboard', {
         replace: true,
         state: {
@@ -96,12 +100,13 @@ export default function ClassDetails() {
           <Link className="btn-secondary" to={`/classes/${classId}/edit`}><Edit3 size={16} />Edit class</Link>
           <Link className="btn-secondary" to={`/classes/${classId}/members`}><Users size={16} />Members</Link>
           <Link className="btn-secondary" to={`/classes/${classId}/results`}><BarChart3 size={16} />Results</Link>
+          <Link className="btn-secondary" to={codespacePath}><Code2 size={16} />Codespace</Link>
           <Link className="btn-secondary" to={`/classes/${classId}/notifications/email`}><Mail size={16} />Notify Students</Link>
           <Link className="btn-primary" to={`/classes/${classId}/units/new`}><Plus size={16} />New unit</Link>
           <button type="button" onClick={() => { setConfirmName(''); setConfirmDelete(true) }} className="btn-secondary text-red-700 hover:border-red-200 hover:bg-red-50"><Trash2 size={16} />Delete class</button>
         </div>
       </div>
-    </section> : <div className="mt-5 flex justify-end"><Link className="btn-secondary" to={`/classes/${classId}/members`}><Users size={16} />View members</Link></div>}
+    </section> : <div className="mt-5 flex justify-end gap-2"><Link className="btn-secondary" to={codespacePath}><Code2 size={16} />Codespace</Link><Link className="btn-secondary" to={`/classes/${classId}/members`}><Users size={16} />View members</Link></div>}
 
     {confirmDelete && <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/40 p-4">
       <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-lift">

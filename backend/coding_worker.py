@@ -5,6 +5,8 @@ import io
 import json
 import sys
 
+MAX_OUTPUT_CHARS = 12000
+
 SAFE_BUILTINS = {
     "abs": abs, "all": all, "any": any, "bool": bool, "dict": dict,
     "enumerate": enumerate, "filter": filter, "float": float, "int": int,
@@ -14,6 +16,18 @@ SAFE_BUILTINS = {
     "tuple": tuple, "zip": zip, "Exception": Exception,
     "ValueError": ValueError, "TypeError": TypeError, "RuntimeError": RuntimeError,
 }
+
+
+class LimitedStringIO(io.StringIO):
+    def write(self, value):
+        remaining = MAX_OUTPUT_CHARS - len(self.getvalue())
+        if remaining <= 0:
+            return len(value)
+        if len(value) > remaining:
+            super().write(value[:remaining])
+            super().write(f"\n... output truncated to {MAX_OUTPUT_CHARS} characters ...")
+            return len(value)
+        return super().write(value)
 
 
 def display(value):
@@ -40,7 +54,7 @@ def error_details(error):
 def main():
     request = json.loads(open(sys.argv[1], encoding="utf-8").read())
     namespace = {"__builtins__": SAFE_BUILTINS}
-    output = io.StringIO()
+    output = LimitedStringIO()
     results = []
     try:
         with contextlib.redirect_stdout(output):
@@ -51,7 +65,7 @@ def main():
 
     overall_error = None
     for index, case in enumerate(request["test_cases"], start=1):
-        case_output = io.StringIO()
+        case_output = LimitedStringIO()
         actual = None
         passed = False
         error_message = None

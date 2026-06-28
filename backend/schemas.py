@@ -60,6 +60,19 @@ class LoginInput(BaseModel):
     password: str
 
 
+class ForgotPasswordInput(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordInput(BaseModel):
+    token: str = Field(min_length=20, max_length=500)
+    new_password: str = Field(min_length=8, max_length=128)
+
+
+class MessageOut(BaseModel):
+    message: str
+
+
 class ClassroomCreate(BaseModel):
     name: str = Field(min_length=2, max_length=160)
     subject: str = Field(min_length=2, max_length=160)
@@ -369,6 +382,28 @@ class CodingRunInput(BaseModel):
     language: Literal["python"] = "python"
 
 
+class CodingTaskRunInput(BaseModel):
+    code: str = Field(min_length=1, max_length=50000)
+    language: Literal["python"] = "python"
+
+
+class CodeRunInput(BaseModel):
+    code: str = Field(min_length=1, max_length=50000)
+    language: Literal["python"] = "python"
+
+
+class CodeRunOut(BaseModel):
+    status: Literal["completed", "error", "timeout"]
+    stdout: str = ""
+    stderr: str = ""
+    execution_time_ms: int
+
+
+class CodeRunTestsInput(CodeRunInput):
+    visible_test_cases: Optional[str] = None
+    hidden_test_cases: Optional[str] = None
+
+
 class CodingTestCaseResult(BaseModel):
     index: int
     input: str
@@ -590,3 +625,181 @@ class EmailNotificationSendResult(BaseModel):
     failed: int
     status: str
     error_message: Optional[str] = None
+
+
+class ClassCodespaceOut(ORMModel):
+    id: int
+    classroom_id: int
+    name: str
+    description: Optional[str] = None
+    created_at: datetime
+    classroom_name: Optional[str] = None
+    role: Optional[Literal["teacher", "student"]] = None
+
+
+class CodespaceTeachingSummary(BaseModel):
+    codespace_id: int
+    classroom_id: int
+    class_name: str
+    codespace_name: str
+    role: Literal["teacher"] = "teacher"
+    total_tasks: int
+    published_tasks: int
+    pending_submissions: int
+
+
+class CodespaceLearningSummary(BaseModel):
+    codespace_id: int
+    classroom_id: int
+    class_name: str
+    codespace_name: str
+    role: Literal["student"] = "student"
+    available_tasks: int
+    submitted_tasks: int
+    pending_feedback: int
+
+
+class CodespacesIndexOut(BaseModel):
+    teaching: list[CodespaceTeachingSummary] = Field(default_factory=list)
+    learning: list[CodespaceLearningSummary] = Field(default_factory=list)
+
+
+class CodingTaskInput(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
+    description: str = ""
+    task_type: Literal["python", "web"] = "python"
+    starter_code: Optional[str] = None
+    starter_html: Optional[str] = None
+    starter_css: Optional[str] = None
+    starter_js: Optional[str] = None
+    preview_enabled: bool = False
+    expected_output: Optional[str] = None
+    language: str = Field(default="python", max_length=40)
+    question_id: Optional[str] = Field(default=None, max_length=100)
+    unit_no: Optional[int] = None
+    unit_title: Optional[str] = None
+    assessment_title: Optional[str] = None
+    difficulty: Optional[str] = Field(default=None, max_length=30)
+    explanation: Optional[str] = None
+    visible_test_cases: Optional[str] = None
+    hidden_test_cases: Optional[str] = None
+    tags: Optional[str] = None
+    marks: int = Field(default=10, ge=0, le=1000)
+    due_at: Optional[datetime] = None
+    is_published: bool = False
+    answer_key: Optional["CodingTaskAnswerKeyInput"] = None
+
+
+class CodingTaskAnswerKeyInput(BaseModel):
+    question_id: str
+    correct_answer: Optional[str] = None
+    accepted_answers: Optional[str] = None
+    expected_output: Optional[str] = None
+    evaluation_mode: str = Field(default="MANUAL", max_length=30)
+    case_sensitive: bool = False
+    visible_test_cases: Optional[str] = None
+    hidden_test_cases: Optional[str] = None
+    explanation: Optional[str] = None
+
+
+class CodingTaskOut(ORMModel):
+    id: int
+    codespace_id: int
+    title: str
+    description: str
+    task_type: str = "python"
+    starter_code: Optional[str] = None
+    starter_html: Optional[str] = None
+    starter_css: Optional[str] = None
+    starter_js: Optional[str] = None
+    preview_enabled: bool = False
+    expected_output: Optional[str] = None
+    language: str = "python"
+    question_id: Optional[str] = None
+    unit_no: Optional[int] = None
+    unit_title: Optional[str] = None
+    assessment_title: Optional[str] = None
+    difficulty: Optional[str] = None
+    explanation: Optional[str] = None
+    visible_test_cases: Optional[str] = None
+    hidden_test_cases: Optional[str] = None
+    tags: Optional[str] = None
+    marks: int
+    due_at: Optional[datetime] = None
+    is_published: bool
+    created_at: datetime
+    submission_count: int = 0
+    my_submission_status: Optional[str] = None
+    my_submission_id: Optional[int] = None
+    my_marks_awarded: Optional[int] = None
+    my_feedback: Optional[str] = None
+    my_code: Optional[str] = None
+    my_html_code: Optional[str] = None
+    my_css_code: Optional[str] = None
+    my_js_code: Optional[str] = None
+    my_evaluation_status: Optional[str] = None
+    my_evaluation_feedback: Optional[str] = None
+    answer_key_exists: bool = False
+
+
+class CodingSubmissionInput(BaseModel):
+    code: Optional[str] = Field(default=None, max_length=50000)
+    html_code: Optional[str] = Field(default=None, max_length=50000)
+    css_code: Optional[str] = Field(default=None, max_length=50000)
+    js_code: Optional[str] = Field(default=None, max_length=50000)
+    preview_snapshot: Optional[str] = Field(default=None, max_length=200000)
+    output: Optional[str] = None
+
+
+class CodingSubmissionEvaluate(BaseModel):
+    marks_awarded: int = Field(ge=0, le=1000)
+    feedback: Optional[str] = None
+
+
+class CodingSubmissionOut(ORMModel):
+    id: int
+    task_id: int
+    student_id: int
+    code: str = ""
+    html_code: Optional[str] = None
+    css_code: Optional[str] = None
+    js_code: Optional[str] = None
+    preview_snapshot: Optional[str] = None
+    output: Optional[str] = None
+    status: str
+    marks_awarded: Optional[int] = None
+    auto_marks: Optional[int] = None
+    final_marks: Optional[int] = None
+    is_correct: Optional[bool] = None
+    evaluation_status: str = "pending"
+    evaluation_feedback: Optional[str] = None
+    feedback: Optional[str] = None
+    submitted_at: datetime
+    evaluated_at: Optional[datetime] = None
+    student_name: Optional[str] = None
+    student_email: Optional[str] = None
+
+
+class CodingSubmissionListOut(ORMModel):
+    id: int
+    task_id: int
+    student_id: int
+    status: str
+    marks_awarded: Optional[int] = None
+    auto_marks: Optional[int] = None
+    final_marks: Optional[int] = None
+    is_correct: Optional[bool] = None
+    evaluation_status: str = "pending"
+    evaluation_feedback: Optional[str] = None
+    feedback: Optional[str] = None
+    submitted_at: datetime
+    evaluated_at: Optional[datetime] = None
+    student_name: Optional[str] = None
+    student_email: Optional[str] = None
+
+
+class CodespaceImportSummary(BaseModel):
+    imported_count: int = 0
+    updated_count: int = 0
+    skipped_count: int = 0
+    errors: list[str] = Field(default_factory=list)

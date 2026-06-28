@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from auth import get_current_user
@@ -214,9 +214,15 @@ def notification_summary(item):
 
 
 @router.get("/classrooms/{classroom_id}/notifications/email/history")
-def email_history(classroom_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)):
+def email_history(
+    classroom_id: int,
+    limit: int = Query(20, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user),
+):
     class_and_teacher(db, classroom_id, user.id)
-    items = db.query(models.EmailNotification).filter_by(classroom_id=classroom_id).order_by(models.EmailNotification.created_at.desc()).all()
+    items = db.query(models.EmailNotification).filter_by(classroom_id=classroom_id).order_by(models.EmailNotification.created_at.desc()).offset(offset).limit(limit).all()
     return [notification_summary(item) for item in items]
 
 

@@ -6,13 +6,10 @@ import ServerWakeNotice from './components/ServerWakeNotice'
 import { FullPageLoader } from './components/common/Loading'
 import Login from './pages/Login'
 import Register from './pages/Register'
-import Dashboard from './pages/Dashboard'
 import CreateClass from './pages/CreateClass'
 import JoinClass from './pages/JoinClass'
 import InviteJoin from './pages/InviteJoin'
-import ClassDetails from './pages/ClassDetails'
 import EditClass from './pages/EditClass'
-import UnitDetails from './pages/UnitDetails'
 import TestDetails from './pages/TestDetails'
 import TestAttempt from './pages/TestAttempt'
 import TestResult from './pages/TestResult'
@@ -25,6 +22,10 @@ import CreateTest from './pages/CreateTest'
 import AddQuestions from './pages/AddQuestions'
 import Profile from './pages/Profile'
 import Settings from './pages/Settings'
+const ResetPassword = lazy(() => import('./pages/ResetPassword'))
+const Dashboard = lazy(() => import('./pages/Dashboard'))
+const ClassDetails = lazy(() => import('./pages/ClassDetails'))
+const UnitDetails = lazy(() => import('./pages/UnitDetails'))
 const CreateAssessment = lazy(() => import('./pages/CreateAssessment'))
 const AssessmentDetails = lazy(() => import('./pages/AssessmentDetails'))
 const AssessmentAttempt = lazy(() => import('./pages/AssessmentAttempt'))
@@ -34,6 +35,11 @@ const MaterialReader = lazy(() => import('./pages/MaterialReader'))
 const EditMaterial = lazy(() => import('./pages/EditMaterial'))
 const EditAssessment = lazy(() => import('./pages/EditAssessment'))
 const EmailNotificationPage = lazy(() => import('./pages/EmailNotificationPage'))
+const Codespaces = lazy(() => import('./pages/Codespaces'))
+const ClassCodespace = lazy(() => import('./pages/ClassCodespace'))
+const CodingTaskEditor = lazy(() => import('./pages/CodingTaskEditor'))
+const CodingTaskAttempt = lazy(() => import('./pages/CodingTaskAttempt'))
+const CodingTaskSubmissions = lazy(() => import('./pages/CodingTaskSubmissions'))
 
 export default function App() {
   return <>
@@ -41,10 +47,17 @@ export default function App() {
     <Suspense fallback={<FullPageLoader />}><Routes>
     <Route path="/login" element={<Login />} />
     <Route path="/register" element={<Register />} />
+    <Route path="/reset-password" element={<ResetPassword />} />
     <Route element={<ProtectedRoute />}>
       <Route element={<Layout />}>
         <Route index element={<Dashboard />} />
         <Route path="dashboard" element={<Dashboard />} />
+        <Route path="codespaces" element={<Codespaces />} />
+        <Route path="codespaces/:codespaceId" element={<ClassCodespace />} />
+        <Route path="codespaces/:codespaceId/tasks/new" element={<CodingTaskEditor />} />
+        <Route path="codespaces/:codespaceId/tasks/:taskId/edit" element={<CodingTaskEditor />} />
+        <Route path="codespaces/:codespaceId/tasks/:taskId/attempt" element={<CodingTaskAttempt />} />
+        <Route path="codespaces/:codespaceId/tasks/:taskId/submissions" element={<CodingTaskSubmissions />} />
         <Route path="profile" element={<Profile />} />
         <Route path="settings" element={<Settings />} />
         <Route path="join/:joinCode" element={<InviteJoin />} />
@@ -56,6 +69,11 @@ export default function App() {
         <Route path="classes/:classId/units/:unitId/edit" element={<EditUnit />} />
         <Route path="classes/:classId/members" element={<MembersPage />} />
         <Route path="classes/:classId/results" element={<ClassResults />} />
+        <Route path="classes/:classId/codespace" element={<ClassCodespace />} />
+        <Route path="classes/:classId/codespace/tasks/new" element={<CodingTaskEditor />} />
+        <Route path="classes/:classId/codespace/tasks/:taskId/edit" element={<CodingTaskEditor />} />
+        <Route path="classes/:classId/codespace/tasks/:taskId/attempt" element={<CodingTaskAttempt />} />
+        <Route path="classes/:classId/codespace/tasks/:taskId/submissions" element={<CodingTaskSubmissions />} />
         <Route path="classes/:classId/notifications/email" element={<EmailNotificationPage />} />
         <Route path="units/:unitId" element={<UnitDetails />} />
         <Route path="units/:unitId/materials/new" element={<CreateMaterial />} />

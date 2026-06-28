@@ -21,6 +21,7 @@ def create(data: schemas.ClassroomCreate, db: Session = Depends(get_db), user=De
     room = models.Classroom(**data.model_dump(), join_code=generate_join_code(db), created_by_user_id=user.id)
     db.add(room); db.flush()
     db.add(models.ClassMember(classroom_id=room.id, user_id=user.id, role="teacher"))
+    db.add(models.ClassCodespace(classroom_id=room.id, name=f"{room.name} Codespace", description=f"Coding workspace for {room.name}"))
     db.commit(); db.refresh(room)
     return classroom_dict(room, "teacher")
 

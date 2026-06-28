@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import Editor from '@monaco-editor/react'
-import { AlertTriangle, BookOpen, CheckCircle2, Clock, LoaderCircle, Play, RotateCcw, Save, Send, ShieldCheck, Terminal, XCircle } from 'lucide-react'
+import { AlertTriangle, BookOpen, CheckCircle2, Clock, Play, Send, ShieldCheck } from 'lucide-react'
 import api, { apiBaseURL, errorMessage, getOnce } from '../api/axios'
-import { AssessmentPageSkeleton, ButtonLoader } from '../components/common/Loading'
+import { AssessmentPageSkeleton } from '../components/common/Loading'
+
+const PythonCodeWorkspace = lazy(() => import('../components/code/PythonCodeWorkspace'))
 
 const BLOCKED_SHORTCUTS = new Set(['c', 'v', 'x', 't', 'n'])
 const EVENT_MESSAGES = {
@@ -349,9 +350,6 @@ function AssessmentQuestion({ question, index, value, onChange }) {
 }
 
 function CodingAnswer({ question, value, onChange }) {
-  const [result, setResult] = useState(null)
-  const [runError, setRunError] = useState('')
-  const [running, setRunning] = useState(false)
   const [saved, setSaved] = useState(false)
   const starterCode = question.starter_code || ''
 
@@ -359,47 +357,43 @@ function CodingAnswer({ question, value, onChange }) {
     onChange(code || '')
     setSaved(false)
   }
-  const runCode = async () => {
-    setRunning(true); setRunError(''); setResult(null)
+  const runCode = async code => {
     try {
-      const response = await api.post('/coding/run', { question_id: question.id, code: value, language: 'python' })
-      setResult(response.data)
-    } catch (err) { setRunError(errorMessage(err)) } finally { setRunning(false) }
+      const response = await api.post('/code/run', { code, language: 'python' })
+      return response.data
+    } catch (err) {
+      throw new Error(errorMessage(err), { cause: err })
+    }
   }
-  const reset = () => {
-    updateCode(starterCode)
-    setResult(null); setRunError('')
+  const runTests = async code => {
+    try {
+      const response = await api.post('/coding/run', { question_id: question.id, code, language: 'python' })
+      return response.data
+    } catch (err) {
+      throw new Error(errorMessage(err), { cause: err })
+    }
   }
-  const save = () => {
-    onChange(value)
+  const save = code => {
+    onChange(code)
     setSaved(true)
   }
 
   return <div>
-    <div className="overflow-hidden rounded-xl border border-slate-300 bg-white shadow-sm focus-within:border-brand-500 focus-within:ring-4 focus-within:ring-brand-100">
-      <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-3 py-2"><span className="text-xs font-bold uppercase tracking-wide text-slate-500">Python editor</span><span className="text-[11px] text-slate-400">4 spaces · line numbers</span></div>
-      <Editor height="300px" language="python" theme="vs" value={value} onChange={updateCode} loading={<div className="grid h-[300px] place-items-center text-sm text-slate-500">Loading editor...</div>} options={{
-        automaticLayout: true, lineNumbers: 'on', minimap: { enabled: false },
-        insertSpaces: true, tabSize: 4, detectIndentation: false,
-        autoClosingBrackets: 'always', autoClosingQuotes: 'always',
-        scrollBeyondLastLine: false, wordWrap: 'on', fontSize: 14,
-        padding: { top: 14, bottom: 14 }, formatOnPaste: true,
-      }} />
-    </div>
-    <div className="mt-3 flex flex-wrap items-center gap-2"><button type="button" disabled={running || !value.trim()} onClick={runCode} className="btn-primary"><Play size={15} />{running ? 'Running...' : 'Run Code'}</button><button type="button" disabled={running} onClick={reset} className="btn-secondary"><RotateCcw size={15} />Reset to Starter Code</button><button type="button" onClick={save} className="btn-secondary"><Save size={15} />Save Answer / Continue</button>{saved && <span className="text-xs font-semibold text-emerald-700">Saved for submission</span>}</div>
     {question.visible_test_cases && <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Visible test cases</p><pre className="mt-2 whitespace-pre-wrap font-mono text-xs leading-6 text-slate-700">{question.visible_test_cases}</pre></div>}
-    {(running || runError || result) && <CodeOutput running={running} error={runError} result={result} />}
+    <Suspense fallback={<div className="mt-4 h-[380px] animate-pulse rounded-xl bg-slate-200" />}>
+      <PythonCodeWorkspace
+        initialCode={value}
+        starterCode={starterCode}
+        language="python"
+        onCodeChange={updateCode}
+        onRun={runCode}
+        onRunTests={runTests}
+        onSubmit={save}
+        submitLabel="Save Answer / Continue"
+        expectedOutput={question.expected_output}
+        showExpectedOutput={false}
+      />
+    </Suspense>
+    {saved && <p className="mt-2 text-xs font-semibold text-emerald-700">Saved for submission</p>}
   </div>
-}
-
-function CodeOutput({ running, error, result }) {
-  const message = result?.error_type === 'IndentationError' ? 'IndentationError: check spaces/tabs and block indentation.' : result?.stderr
-  return <section className="mt-4 overflow-hidden rounded-xl border border-slate-800 bg-slate-950 text-slate-100"><header className="flex items-center justify-between border-b border-slate-800 px-4 py-2.5"><span className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-slate-300"><Terminal size={15} />Output</span>{result && <span className="text-[11px] text-slate-500">{result.execution_time_ms} ms</span>}</header><div className="space-y-4 p-4">
-    {running && <p className="flex items-center gap-2 text-sm text-slate-300"><LoaderCircle size={16} className="animate-spin" />Running visible tests...</p>}
-    {error && <p className="whitespace-pre-wrap text-sm text-red-300">{error}</p>}
-    {message && <pre className="whitespace-pre-wrap rounded-lg border border-red-900/60 bg-red-950/40 p-3 text-xs leading-6 text-red-200">{message}</pre>}
-    {result?.stdout && <div><p className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-slate-500">Standard output</p><pre className="whitespace-pre-wrap text-xs leading-6 text-slate-200">{result.stdout}</pre></div>}
-    {result && !result.stderr && !result.stdout && !result.test_case_results.length && <p className="text-sm text-emerald-300">Code ran without output.</p>}
-    {result?.test_case_results.length > 0 && <div className="space-y-2">{result.test_case_results.map(test => <div key={test.index} className={`rounded-lg border p-3 ${test.passed ? 'border-emerald-900 bg-emerald-950/30' : 'border-red-900 bg-red-950/30'}`}><div className="flex items-center gap-2 text-xs font-bold">{test.passed ? <CheckCircle2 size={15} className="text-emerald-400" /> : <XCircle size={15} className="text-red-400" />}Visible test {test.index}: {test.passed ? 'Passed' : 'Failed'}</div><div className="mt-2 grid gap-2 text-xs sm:grid-cols-3"><p><span className="text-slate-500">Input</span><br /><code>{test.input}</code></p><p><span className="text-slate-500">Expected</span><br /><code>{test.expected}</code></p><p><span className="text-slate-500">Actual</span><br /><code>{test.actual ?? 'No result'}</code></p></div>{test.error && <p className="mt-2 text-xs text-red-300">{test.error}</p>}</div>)}</div>}
-  </div></section>
 }

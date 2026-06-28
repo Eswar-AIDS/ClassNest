@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { AlertCircle, BookOpen } from 'lucide-react'
-import api, { errorMessage } from '../api/axios'
+import api, { cacheKeys, errorMessage, removeSessionCache } from '../api/axios'
 
 export default function InviteJoin() {
   const { joinCode } = useParams()
@@ -14,7 +14,10 @@ export default function InviteJoin() {
     started.current = true
 
     api.post('/classrooms/join', { join_code: joinCode })
-      .then(response => navigate(`/classes/${response.data.id}`, { replace: true }))
+      .then(response => {
+        removeSessionCache(cacheKeys.dashboardClasses)
+        navigate(`/classes/${response.data.id}`, { replace: true })
+      })
       .catch(err => {
         if (err.response?.status === 409) {
           setError('You are already in this class')

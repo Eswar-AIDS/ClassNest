@@ -46,7 +46,9 @@ api.interceptors.response.use(response => {
   if (error.config) clearSlowRequestTimer(error.config);
   if (error.response?.status === 401) {
     localStorage.removeItem('classnest_token');
-    if (!location.pathname.match('/(login|register)')) {
+    removeSessionCache(cacheKeys.authMe);
+    removeSessionCache(cacheKeys.dashboardClasses);
+    if (!location.pathname.match('/(login|register|reset-password)')) {
       sessionStorage.setItem('classnest_return_to', `${location.pathname}${location.search}${location.hash}`);
       location.href = '/login';
     }

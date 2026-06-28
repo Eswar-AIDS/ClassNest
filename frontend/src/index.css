@@ -26,22 +26,41 @@
   .section-title { @apply text-lg font-bold tracking-tight text-slate-900; }
   .back-link { @apply inline-flex items-center gap-2 text-sm font-semibold text-slate-500 transition hover:text-slate-900; }
   .empty-state { @apply rounded-2xl border border-dashed border-slate-300 bg-white/60 px-6 py-10 text-center text-sm text-slate-500; }
+  .codespace-focus-shell { @apply fixed inset-0 z-50 flex flex-col overflow-hidden bg-slate-50 text-ink; }
+  .codespace-focus-toolbar { @apply flex min-h-16 flex-col gap-3 border-b border-slate-200 bg-white px-4 py-3 shadow-sm sm:flex-row sm:items-center sm:justify-between sm:px-5; }
+  .codespace-focus-workspace { @apply flex-1 overflow-auto p-3 sm:p-4; }
+  .codespace-focus-web-grid { grid-template-columns: minmax(0, 55fr) minmax(360px, 45fr); }
+  .codespace-focus-workspace .rounded-xl { border-radius: .5rem; }
+  .codespace-focus-workspace .page-title { @apply text-xl; }
+  .codespace-focus-workspace .btn,
+  .codespace-focus-toolbar .btn { @apply min-h-9 px-3 py-1.5 text-xs sm:text-sm; }
   .auth-page {
-    @apply relative grid min-h-screen place-items-center overflow-hidden bg-slate-50 px-4 py-10 sm:px-6;
+    @apply relative grid min-h-screen place-items-center overflow-x-hidden bg-slate-50 px-4 py-10 sm:px-6;
     background-image:
-      linear-gradient(rgba(30, 64, 175, 0.08) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(30, 64, 175, 0.08) 1px, transparent 1px);
-    background-size: 42px 42px;
+      radial-gradient(circle at 18% 18%, rgba(221,235,255,.92), transparent 28%),
+      radial-gradient(circle at 84% 72%, rgba(220,252,231,.76), transparent 30%),
+      linear-gradient(135deg, #f8fbff 0%, #eef7ff 44%, #f8fffb 100%);
   }
   .auth-page::before {
     @apply pointer-events-none absolute inset-0;
     content: "";
     background:
-      radial-gradient(circle at 50% 35%, rgba(255,255,255,.86), rgba(248,250,252,.62) 42%, rgba(248,250,252,.94) 72%),
-      linear-gradient(180deg, rgba(255,255,255,.62), rgba(248,250,252,.92));
+      radial-gradient(circle, rgba(23,105,189,.14) 1px, transparent 1.4px),
+      linear-gradient(rgba(23,105,189,.055) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(23,105,189,.055) 1px, transparent 1px);
+    background-size: 28px 28px, 56px 56px, 56px 56px;
+    opacity: .48;
   }
+  .auth-page::after {
+    @apply pointer-events-none absolute inset-0;
+    content: "";
+    background: linear-gradient(180deg, rgba(255,255,255,.52), rgba(255,255,255,.74));
+  }
+  .auth-main { @apply relative z-10 grid w-full place-items-center; }
+  .auth-main-inner { @apply grid w-full max-w-[440px] place-items-center; }
   .auth-card {
-    @apply relative z-10 w-full max-w-[440px] rounded-2xl border border-slate-200/80 bg-white/90 px-5 py-7 shadow-[0_24px_80px_rgba(15,23,42,0.14)] backdrop-blur-xl transition duration-300 sm:px-8 sm:py-9;
+    @apply relative z-10 w-full max-w-[440px] rounded-2xl border border-white/60 bg-white/75 px-5 py-7 shadow-[0_24px_80px_rgba(15,23,42,0.14)] backdrop-blur-2xl transition duration-300 sm:px-8 sm:py-9;
+    animation: authCardSlideIn .62s ease-out both;
   }
   .auth-card:hover { @apply border-slate-300 shadow-[0_30px_90px_rgba(15,23,42,0.18)]; }
   .auth-logo {
@@ -49,45 +68,84 @@
   }
   .auth-label { @apply mb-1.5 block text-sm font-semibold text-slate-700; }
   .auth-field {
-    @apply w-full rounded-xl border border-slate-300 bg-white/90 px-4 py-3 text-sm text-slate-950 shadow-sm transition duration-200 placeholder:text-slate-400 hover:border-slate-400 focus:border-brand-500 focus:bg-white focus:ring-4 focus:ring-brand-100;
+    @apply w-full rounded-xl border border-slate-300 bg-white/90 px-4 py-3 text-sm text-slate-950 shadow-sm transition duration-200 placeholder:text-slate-400 hover:border-slate-400 focus:border-brand-600 focus:bg-white focus:outline-none;
+    box-shadow: 0 1px 2px rgba(15,23,42,.04);
+  }
+  .auth-field:focus {
+    box-shadow: 0 0 0 4px rgba(31,111,199,.12), 0 1px 2px rgba(15,23,42,.04);
   }
   .auth-button {
-    @apply inline-flex min-h-11 items-center justify-center rounded-xl bg-emerald-600 px-4 py-3 text-sm font-bold text-white shadow-lg shadow-emerald-700/20 transition duration-200 hover:-translate-y-0.5 hover:bg-emerald-700 hover:shadow-xl hover:shadow-emerald-700/25 focus:ring-4 focus:ring-emerald-100 disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-60;
+    @apply inline-flex min-h-11 items-center justify-center rounded-xl px-4 py-3 text-sm font-bold text-white transition duration-200 focus:outline-none focus:ring-4 focus:ring-brand-100 disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-60;
+    background: linear-gradient(180deg, #2f80df 0%, #1f6fc7 100%);
+    box-shadow: 0 8px 18px rgba(31,111,199,.22);
   }
+  .auth-button:hover {
+    background: linear-gradient(180deg, #2876d1 0%, #1a62b3 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 10px 22px rgba(31,111,199,.26);
+  }
+  .auth-button:active { transform: translateY(0); }
   .auth-link { @apply font-bold text-brand-700 transition hover:text-emerald-700 focus:rounded focus:ring-4 focus:ring-brand-100; }
   .auth-error { @apply rounded-xl border border-red-200 bg-red-50/90 p-3 text-sm font-medium text-red-700; }
+  .auth-forgot-row { @apply pt-1.5 pb-1 text-right; }
 }
 
-.auth-glow {
+@media (max-width: 1023px) {
+  .codespace-focus-web-grid { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (max-width: 640px) {
+  .codespace-focus-shell { @apply overflow-auto; }
+  .codespace-focus-toolbar { @apply sticky top-0 z-10; }
+  .codespace-focus-workspace { @apply p-2; }
+}
+
+.auth-mesh {
   position: absolute;
   z-index: 0;
-  width: min(44vw, 420px);
+  width: min(54vw, 520px);
   aspect-ratio: 1;
   border-radius: 9999px;
-  filter: blur(54px);
+  filter: blur(58px);
   opacity: .42;
-  animation: authGlow 9s ease-in-out infinite;
+  animation: authMesh 18s ease-in-out infinite;
 }
-.auth-glow-blue {
-  top: 20%;
-  left: calc(50% - 370px);
-  background: radial-gradient(circle, rgba(37,99,235,.5), rgba(14,165,233,.08) 68%, transparent 72%);
+.auth-mesh-blue {
+  top: 8%;
+  left: calc(50% - 520px);
+  background: radial-gradient(circle, rgba(40,127,213,.44), rgba(14,165,233,.08) 68%, transparent 72%);
 }
-.auth-glow-green {
-  right: calc(50% - 380px);
-  bottom: 18%;
-  background: radial-gradient(circle, rgba(22,163,74,.5), rgba(34,197,94,.09) 68%, transparent 72%);
-  animation-delay: -4s;
+.auth-mesh-cyan {
+  right: calc(50% - 460px);
+  top: 18%;
+  background: radial-gradient(circle, rgba(103,232,249,.42), rgba(221,235,255,.12) 68%, transparent 72%);
+  animation-delay: -6s;
+}
+.auth-mesh-green {
+  right: calc(50% - 430px);
+  bottom: 5%;
+  background: radial-gradient(circle, rgba(34,197,94,.38), rgba(240,253,244,.12) 68%, transparent 72%);
+  animation-delay: -11s;
 }
 
-@keyframes authGlow {
+@keyframes authMesh {
   0%, 100% { transform: translate3d(0, 0, 0) scale(1); opacity: .38; }
-  50% { transform: translate3d(14px, -10px, 0) scale(1.06); opacity: .52; }
+  50% { transform: translate3d(24px, -18px, 0) scale(1.08); opacity: .5; }
+}
+
+@keyframes authCardSlideIn {
+  from { opacity: 0; transform: translateX(40px); }
+  to { opacity: 1; transform: translateX(0); }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .auth-glow { animation: none; }
+  .auth-mesh, .auth-card { animation: none; }
   .auth-card, .auth-field, .auth-button, .auth-link { transition: none; }
+  .auth-button:hover { transform: none; }
+}
+
+@media (max-width: 640px) {
+  .auth-mesh { width: 72vw; opacity: .24; }
 }
 
 .prose { color: #334155; font-size: 1rem; line-height: 1.8; }

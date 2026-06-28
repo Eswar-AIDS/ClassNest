@@ -8,13 +8,27 @@ from email.utils import make_msgid
 
 logger = logging.getLogger(__name__)
 
+AUTOMATED_FOOTER_TEXT = (
+    "This is an automated notification from ClassNest.\n"
+    "Please do not reply to this email. For questions, contact your class teacher directly."
+)
+
+AUTOMATED_FOOTER_HTML = (
+    '<hr style="border:0;border-top:1px solid #e5e7eb;margin:24px 0 12px;" />'
+    '<p style="margin:0;font-size:12px;line-height:1.5;color:#6b7280;">'
+    'This is an automated notification from <strong>ClassNest</strong>.<br>'
+    'Please do not reply to this email. For questions, contact your class teacher directly.'
+    '</p>'
+)
+
 
 def configuration_error():
     """Check whether the selected email provider is configured."""
     provider = os.getenv("EMAIL_PROVIDER", "smtp").strip().lower()
     if provider == "resend":
-        required = ["RESEND_API_KEY", "SMTP_FROM_EMAIL"]
-        missing = [name for name in required if not os.getenv(name)]
+        missing = [name for name in ["RESEND_API_KEY"] if not os.getenv(name)]
+        if not (os.getenv("RESEND_FROM_EMAIL") or os.getenv("SMTP_FROM_EMAIL")):
+            missing.append("RESEND_FROM_EMAIL or SMTP_FROM_EMAIL")
         return f"Resend is not configured. Missing: {', '.join(missing)}" if missing else None
     if provider != "smtp":
         return f"Unsupported EMAIL_PROVIDER: {provider}. Use resend or smtp"
@@ -52,8 +66,9 @@ def _failure(recipient_email, exception, prefix):
 
 
 def _from_address():
-    from_name = os.getenv("SMTP_FROM_NAME", "ClassNest").strip()
-    from_email = os.environ["SMTP_FROM_EMAIL"].strip()
+    from_name = os.getenv("RESEND_FROM_NAME") or os.getenv("SMTP_FROM_NAME", "ClassNest")
+    from_name = from_name.strip()
+    from_email = (os.getenv("RESEND_FROM_EMAIL") or os.environ["SMTP_FROM_EMAIL"]).strip()
     return f"{from_name} <{from_email}>" if from_name else from_email
 
 
@@ -65,6 +80,31 @@ def _plain_text_to_html(plain_text):
         f"{formatted_body}"
         "</div>"
     )
+
+
+def _body_has_footer(body):
+    return bool(body and (
+        "This is an automated notification from ClassNest" in body
+        or "This is an automated notification from <strong>ClassNest</strong>" in body
+    ))
+
+
+def _append_plain_footer(plain_text):
+    if _body_has_footer(plain_text):
+        return plain_text
+    return f"{plain_text.rstrip()}\n\n---\n{AUTOMATED_FOOTER_TEXT}"
+
+
+def _append_html_footer(html_body):
+    if _body_has_footer(html_body):
+        return html_body
+    return f"{html_body.rstrip()}{AUTOMATED_FOOTER_HTML}"
+
+
+def _prepare_email_bodies(plain_text, html_body=None):
+    plain_with_footer = _append_plain_footer(plain_text)
+    html_source = html_body or _plain_text_to_html(plain_text)
+    return plain_with_footer, _append_html_footer(html_source)
 
 
 def _send_resend(recipient_email, subject, plain_text, html_body=None):
@@ -119,8 +159,7 @@ def _send_smtp(recipient_email, subject, plain_text, html_body=None):
     message["Subject"] = subject
     message["Message-ID"] = make_msgid(domain=from_email.split("@")[-1])
     message.set_content(plain_text)
-    if html_body:
-        message.add_alternative(html_body, subtype="html")
+    message.add_alternative(html_body, subtype="html")
 
     use_tls = os.getenv("SMTP_USE_TLS", "true").strip().lower() in {"1", "true", "yes", "on"}
     username = os.getenv("SMTP_USERNAME")
@@ -164,6 +203,7 @@ def send_email(recipient_email, subject, plain_text, html_body=None):
     config_error = configuration_error()
     if config_error:
         return False, config_error, None
+    plain_text, html_body = _prepare_email_bodies(plain_text, html_body)
     if os.getenv("EMAIL_PROVIDER", "smtp").strip().lower() == "resend":
         return _send_resend(recipient_email, subject, plain_text, html_body)
     return _send_smtp(recipient_email, subject, plain_text, html_body)

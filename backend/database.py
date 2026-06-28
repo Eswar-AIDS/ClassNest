@@ -57,6 +57,33 @@ def ensure_user_profile_columns():
             connection.execute(text("ALTER TABLE users ADD COLUMN avatar_url VARCHAR(500)"))
 
 
+def ensure_password_reset_table():
+    """Create password reset token storage for existing databases."""
+    inspector = inspect(engine)
+    if "users" not in inspector.get_table_names():
+        return
+    postgres = DATABASE_URL.startswith("postgresql")
+    id_type = "SERIAL PRIMARY KEY" if postgres else "INTEGER PRIMARY KEY"
+    timestamp_type = "TIMESTAMP" if postgres else "DATETIME"
+    with engine.begin() as connection:
+        if "password_reset_tokens" not in inspector.get_table_names():
+            connection.execute(text(f"""
+                CREATE TABLE password_reset_tokens (
+                    id {id_type},
+                    user_id INTEGER NOT NULL,
+                    token_hash TEXT NOT NULL,
+                    expires_at {timestamp_type} NOT NULL,
+                    used_at {timestamp_type} NULL,
+                    created_at {timestamp_type} DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+                )
+            """))
+        connection.execute(text("CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_token_hash ON password_reset_tokens (token_hash)"))
+        connection.execute(text("CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_user_id ON password_reset_tokens (user_id)"))
+        if postgres:
+            connection.execute(text("ALTER TABLE password_reset_tokens ENABLE ROW LEVEL SECURITY"))
+
+
 def ensure_assessment_columns():
     """Keep existing databases compatible with assessment archiving (SQLite and PostgreSQL)."""
     inspector = inspect(engine)
@@ -222,6 +249,62 @@ def ensure_classroom_columns():
             connection.execute(text("ALTER TABLE classrooms ADD COLUMN archived BOOLEAN NOT NULL DEFAULT 0"))
         if "archived_at" not in columns:
             connection.execute(text("ALTER TABLE classrooms ADD COLUMN archived_at DATETIME"))
+
+
+def ensure_codespace_columns():
+    """Keep existing databases compatible with Codespace schema additions."""
+    inspector = inspect(engine)
+    if "coding_tasks" not in inspector.get_table_names():
+        return
+    columns = {column["name"] for column in inspector.get_columns("coding_tasks")}
+    submission_columns = {column["name"] for column in inspector.get_columns("coding_submissions")} if "coding_submissions" in inspector.get_table_names() else set()
+    timestamp_type = "TIMESTAMP" if DATABASE_URL.startswith("postgresql") else "DATETIME"
+    boolean_default = "FALSE" if DATABASE_URL.startswith("postgresql") else "0"
+    with engine.begin() as connection:
+        task_columns = {
+            "question_id": "VARCHAR(100)",
+            "unit_no": "INTEGER",
+            "unit_title": "TEXT",
+            "assessment_title": "TEXT",
+            "task_type": "VARCHAR(20) NOT NULL DEFAULT 'python'",
+            "starter_html": "TEXT",
+            "starter_css": "TEXT",
+            "starter_js": "TEXT",
+            "preview_enabled": f"BOOLEAN NOT NULL DEFAULT {boolean_default}",
+            "difficulty": "VARCHAR(30)",
+            "explanation": "TEXT",
+            "visible_test_cases": "TEXT",
+            "hidden_test_cases": "TEXT",
+            "tags": "TEXT",
+            "language": "VARCHAR(40) NOT NULL DEFAULT 'python'",
+        }
+        for column, definition in task_columns.items():
+            if column not in columns:
+                connection.execute(text(f"ALTER TABLE coding_tasks ADD COLUMN {column} {definition}"))
+        submission_additions = {
+            "html_code": "TEXT",
+            "css_code": "TEXT",
+            "js_code": "TEXT",
+            "preview_snapshot": "TEXT",
+            "auto_marks": "INTEGER",
+            "final_marks": "INTEGER",
+            "is_correct": "BOOLEAN",
+            "evaluation_status": "VARCHAR(30) NOT NULL DEFAULT 'pending'",
+            "evaluation_feedback": "TEXT",
+            "evaluated_at": timestamp_type,
+            "completion_email_sent": f"BOOLEAN NOT NULL DEFAULT {boolean_default}",
+        }
+        for column, definition in submission_additions.items():
+            if column not in submission_columns:
+                connection.execute(text(f"ALTER TABLE coding_submissions ADD COLUMN {column} {definition}"))
+        indexes = [
+            "CREATE INDEX IF NOT EXISTS ix_coding_tasks_codespace_published_created ON coding_tasks (codespace_id, is_published, created_at)",
+            "CREATE INDEX IF NOT EXISTS ix_coding_tasks_codespace_question ON coding_tasks (codespace_id, question_id)",
+            "CREATE INDEX IF NOT EXISTS ix_coding_submissions_task_submitted ON coding_submissions (task_id, submitted_at)",
+            "CREATE INDEX IF NOT EXISTS ix_coding_submissions_student_status ON coding_submissions (student_id, status)",
+        ]
+        for statement in indexes:
+            connection.execute(text(statement))
 
 
 def ensure_material_attachment_columns():

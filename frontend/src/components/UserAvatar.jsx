@@ -3,7 +3,7 @@ import { useState } from 'react'
 export default function UserAvatar({ user, size = 'md', className = '' }) {
   const [failedUrl, setFailedUrl] = useState(null)
 
-  const sizes = size === 'lg' ? 'size-24 text-3xl' : size === 'sm' ? 'size-9 text-sm' : 'size-12 text-lg'
+  const sizes = size === 'xl' ? 'size-28 text-4xl' : size === 'lg' ? 'size-24 text-3xl' : size === 'sm' ? 'size-9 text-sm' : 'size-12 text-lg'
   const initial = user?.name?.trim()?.[0]?.toUpperCase() || '?'
 
   if (user?.avatar_url && failedUrl !== user.avatar_url) {

@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, JSON, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Index, Integer, JSON, String, Text, UniqueConstraint
 from sqlalchemy.orm import relationship, validates
 from database import Base
 
@@ -28,6 +28,7 @@ class Classroom(Base):
     archived_at = Column(DateTime, nullable=True)
     units = relationship("Unit", cascade="all, delete-orphan", back_populates="classroom")
     members = relationship("ClassMember", cascade="all, delete-orphan", back_populates="classroom")
+    codespace = relationship("ClassCodespace", cascade="all, delete-orphan", back_populates="classroom", uselist=False)
 
 
 class ClassMember(Base):
@@ -297,3 +298,116 @@ class EmailNotificationRecipient(Base):
     sent_at = Column(DateTime, nullable=True)
     notification = relationship("EmailNotification", back_populates="recipients")
     user = relationship("User")
+
+
+class ClassCodespace(Base):
+    __tablename__ = "class_codespaces"
+    __table_args__ = (UniqueConstraint("classroom_id"),)
+    id = Column(Integer, primary_key=True)
+    classroom_id = Column(Integer, ForeignKey("classrooms.id", ondelete="CASCADE"), nullable=False, index=True)
+    name = Column(String(200), nullable=False)
+    description = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    classroom = relationship("Classroom", back_populates="codespace")
+    tasks = relationship("CodingTask", cascade="all, delete-orphan", passive_deletes=True, back_populates="codespace")
+
+
+class PasswordResetToken(Base):
+    __tablename__ = "password_reset_tokens"
+    __table_args__ = (
+        Index("idx_password_reset_tokens_token_hash", "token_hash"),
+        Index("idx_password_reset_tokens_user_id", "user_id"),
+    )
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    token_hash = Column(Text, nullable=False)
+    expires_at = Column(DateTime, nullable=False)
+    used_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    user = relationship("User")
+
+
+class CodingTask(Base):
+    __tablename__ = "coding_tasks"
+    __table_args__ = (
+        Index("ix_coding_tasks_codespace_published_created", "codespace_id", "is_published", "created_at"),
+        Index("ix_coding_tasks_codespace_question", "codespace_id", "question_id"),
+    )
+    id = Column(Integer, primary_key=True)
+    codespace_id = Column(Integer, ForeignKey("class_codespaces.id", ondelete="CASCADE"), nullable=False, index=True)
+    title = Column(String(200), nullable=False)
+    description = Column(Text, default="", nullable=False)
+    question_id = Column(String(100), nullable=True, index=True)
+    unit_no = Column(Integer, nullable=True)
+    unit_title = Column(Text, nullable=True)
+    assessment_title = Column(Text, nullable=True)
+    task_type = Column(String(20), default="python", nullable=False)
+    starter_code = Column(Text, nullable=True)
+    starter_html = Column(Text, nullable=True)
+    starter_css = Column(Text, nullable=True)
+    starter_js = Column(Text, nullable=True)
+    preview_enabled = Column(Boolean, default=False, nullable=False)
+    expected_output = Column(Text, nullable=True)
+    difficulty = Column(String(30), nullable=True)
+    explanation = Column(Text, nullable=True)
+    visible_test_cases = Column(Text, nullable=True)
+    hidden_test_cases = Column(Text, nullable=True)
+    tags = Column(Text, nullable=True)
+    language = Column(String(40), default="python", nullable=False)
+    marks = Column(Integer, default=10, nullable=False)
+    due_at = Column(DateTime, nullable=True)
+    is_published = Column(Boolean, default=False, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    codespace = relationship("ClassCodespace", back_populates="tasks")
+    submissions = relationship("CodingSubmission", cascade="all, delete-orphan", passive_deletes=True, back_populates="task")
+    answer_key = relationship("CodingTaskAnswerKey", cascade="all, delete-orphan", passive_deletes=True, back_populates="task", uselist=False)
+
+
+class CodingTaskAnswerKey(Base):
+    __tablename__ = "coding_task_answer_keys"
+    __table_args__ = (UniqueConstraint("task_id"),)
+    id = Column(Integer, primary_key=True)
+    task_id = Column(Integer, ForeignKey("coding_tasks.id", ondelete="CASCADE"), nullable=False, index=True)
+    question_id = Column(Text, nullable=False)
+    correct_answer = Column(Text, nullable=True)
+    accepted_answers = Column(Text, nullable=True)
+    expected_output = Column(Text, nullable=True)
+    evaluation_mode = Column(String(30), default="MANUAL", nullable=False)
+    case_sensitive = Column(Boolean, default=False, nullable=False)
+    visible_test_cases = Column(Text, nullable=True)
+    hidden_test_cases = Column(Text, nullable=True)
+    explanation = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    task = relationship("CodingTask", back_populates="answer_key")
+
+
+class CodingSubmission(Base):
+    __tablename__ = "coding_submissions"
+    __table_args__ = (
+        UniqueConstraint("task_id", "student_id"),
+        Index("ix_coding_submissions_task_submitted", "task_id", "submitted_at"),
+        Index("ix_coding_submissions_student_status", "student_id", "status"),
+    )
+    id = Column(Integer, primary_key=True)
+    task_id = Column(Integer, ForeignKey("coding_tasks.id", ondelete="CASCADE"), nullable=False, index=True)
+    student_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    code = Column(Text, nullable=False, default="")
+    html_code = Column(Text, nullable=True)
+    css_code = Column(Text, nullable=True)
+    js_code = Column(Text, nullable=True)
+    preview_snapshot = Column(Text, nullable=True)
+    output = Column(Text, nullable=True)
+    status = Column(String(30), default="submitted", nullable=False)
+    marks_awarded = Column(Integer, nullable=True)
+    auto_marks = Column(Integer, nullable=True)
+    final_marks = Column(Integer, nullable=True)
+    is_correct = Column(Boolean, nullable=True)
+    evaluation_status = Column(String(30), default="pending", nullable=False)
+    evaluation_feedback = Column(Text, nullable=True)
+    feedback = Column(Text, nullable=True)
+    submitted_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    evaluated_at = Column(DateTime, nullable=True)
+    completion_email_sent = Column(Boolean, default=False, nullable=False)
+    task = relationship("CodingTask", back_populates="submissions")
+    student = relationship("User")

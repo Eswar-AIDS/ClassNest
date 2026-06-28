@@ -2,13 +2,23 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from auth import get_current_user
-from coding_runner import run_python_code
+from coding_runner import run_python_code, run_python_script
 from database import get_db
 from utils import require_member
 import models
 import schemas
 
 router = APIRouter(tags=["Coding"])
+
+
+@router.post("/code/run", response_model=schemas.CodeRunOut)
+def run_script(data: schemas.CodeRunInput, _user=Depends(get_current_user)):
+    return run_python_script(data.code)
+
+
+@router.post("/code/run-tests", response_model=schemas.CodingRunOut)
+def run_tests(data: schemas.CodeRunTestsInput, _user=Depends(get_current_user)):
+    return run_python_code(data.code, data.visible_test_cases)
 
 
 @router.post("/coding/run", response_model=schemas.CodingRunOut)

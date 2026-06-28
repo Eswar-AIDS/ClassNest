@@ -1,4 +1,4 @@
-import { BookOpen, LayoutDashboard, X } from 'lucide-react'
+import { BookOpen, Code2, LayoutDashboard, X } from 'lucide-react'
 import { NavLink } from 'react-router-dom'
 
 export default function Sidebar({ open, onClose }) {
@@ -16,6 +16,9 @@ export default function Sidebar({ open, onClose }) {
         <p className="px-3 pb-2 pt-3 text-[11px] font-bold uppercase tracking-[.13em] text-slate-400">Workspace</p>
         <NavLink to="/" end onClick={onClose} className={({ isActive }) => `flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold transition ${isActive ? 'bg-brand-50 text-brand-700' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}`}>
           <LayoutDashboard size={18} />Dashboard
+        </NavLink>
+        <NavLink to="/codespaces" onClick={onClose} className={({ isActive }) => `mt-1 flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold transition ${isActive ? 'bg-brand-50 text-brand-700' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}`}>
+          <Code2 size={18} />Codespaces
         </NavLink>
       </nav>
       <div className="m-4 border-t border-slate-200 pt-4 text-xs leading-5 text-slate-500">
