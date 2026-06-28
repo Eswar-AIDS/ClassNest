@@ -223,7 +223,7 @@ function ActiveUsersPanel({ users, loading }) {
             <td className="px-4 py-3 text-slate-500">{user.email}</td>
             <td className="px-4 py-3 text-slate-700">{activityLabel(user.activity_type)}</td>
             <td className="px-4 py-3 text-slate-500">{user.activity_label || user.route_path || 'Class activity'}</td>
-            <td className="px-4 py-3 text-slate-500">{formatLastActive(user.last_active_at)}</td>
+            <td className="px-4 py-3 text-slate-500" title={formatFullLocalTimestamp(user.last_active_at)}>{formatLastActive(user.last_active_at)}</td>
             <td className="px-4 py-3"><StatusBadge status={user.status} /></td>
           </tr>)}
         </tbody>
@@ -257,5 +257,40 @@ function activityLabel(type) {
 }
 
 function formatLastActive(value) {
-  return new Date(value).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })
+  if (!value) return '—'
+  const date = serverDate(value)
+  const now = new Date()
+  const diffMs = now - date
+  const diffMin = Math.floor(diffMs / 60000)
+
+  if (diffMin < 1) return 'Just now'
+  if (diffMin < 60) return `${diffMin} min ago`
+
+  const isToday = date.toDateString() === now.toDateString()
+  const time = new Intl.DateTimeFormat(undefined, {
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(date)
+
+  if (isToday) return `Today, ${time}`
+
+  return new Intl.DateTimeFormat(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(date)
+}
+
+function formatFullLocalTimestamp(value) {
+  if (!value) return ''
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: 'full',
+    timeStyle: 'medium',
+  }).format(serverDate(value))
+}
+
+function serverDate(value) {
+  return new Date(/[zZ]|[+-]\d\d:\d\d$/.test(value) ? value : `${value}Z`)
 }
