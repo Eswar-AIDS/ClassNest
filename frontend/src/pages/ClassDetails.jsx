@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { BarChart3, Code2, Copy, Edit3, Link as LinkIcon, Mail, Plus, Settings2, Trash2, Users } from 'lucide-react'
+import { BarChart3, ChevronDown, Code2, Copy, Edit3, Link as LinkIcon, Mail, Plus, Settings2, Trash2, Users } from 'lucide-react'
 import api, { cacheKeys, errorMessage, getOnce, removeSessionCache } from '../api/axios'
 import UnitCard from '../components/UnitCard'
 import { ClassPageSkeleton } from '../components/LoadingSkeletons'
+import useClassActivity from '../hooks/useClassActivity'
 
 export default function ClassDetails() {
   const { classId } = useParams()
@@ -16,6 +17,11 @@ export default function ClassDetails() {
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [confirmName, setConfirmName] = useState('')
   const [deleting, setDeleting] = useState(false)
+  const [toolsOpen, setToolsOpen] = useState(false)
+  const [contentView, setContentView] = useState('units')
+  const [activeUsers, setActiveUsers] = useState([])
+  const [activeUsersLoading, setActiveUsersLoading] = useState(false)
+  const toolsRef = useRef(null)
 
   useEffect(() => {
     let active = true
@@ -29,6 +35,52 @@ export default function ClassDetails() {
     })
     return () => { active = false }
   }, [classId])
+
+  useClassActivity(classId, room ? {
+    activity_type: 'class_view',
+    activity_label: room.name,
+    entity_type: 'classroom',
+    entity_id: Number(classId),
+  } : null)
+
+  useEffect(() => {
+    if (!toolsOpen) return undefined
+    const closeTools = event => {
+      if (!toolsRef.current?.contains(event.target)) setToolsOpen(false)
+    }
+    const closeOnEscape = event => {
+      if (event.key === 'Escape') setToolsOpen(false)
+    }
+    document.addEventListener('mousedown', closeTools)
+    document.addEventListener('keydown', closeOnEscape)
+    return () => {
+      document.removeEventListener('mousedown', closeTools)
+      document.removeEventListener('keydown', closeOnEscape)
+    }
+  }, [toolsOpen])
+
+  useEffect(() => {
+    if (!room || room.role !== 'teacher' || contentView !== 'active') return undefined
+    let active = true
+    let timer
+    const loadActiveUsers = async (showLoading = false) => {
+      if (showLoading) setActiveUsersLoading(true)
+      try {
+        const { data } = await api.get(`/classes/${classId}/active-users`)
+        if (active) setActiveUsers(data)
+      } catch (err) {
+        if (active) setError(errorMessage(err))
+      } finally {
+        if (active) setActiveUsersLoading(false)
+      }
+    }
+    loadActiveUsers(true)
+    timer = setInterval(() => loadActiveUsers(false), 20000)
+    return () => {
+      active = false
+      clearInterval(timer)
+    }
+  }, [classId, contentView, room])
 
   if (!room) return <ClassPageSkeleton />
 
@@ -96,14 +148,22 @@ export default function ClassDetails() {
           <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-slate-100 text-slate-600"><Settings2 size={17} /></span>
           <div><h2 className="text-sm font-bold text-slate-900">Teacher management</h2><p className="mt-0.5 text-xs leading-5 text-slate-500">Add course content, manage learners, and review performance.</p></div>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Link className="btn-secondary" to={`/classes/${classId}/edit`}><Edit3 size={16} />Edit class</Link>
-          <Link className="btn-secondary" to={`/classes/${classId}/members`}><Users size={16} />Members</Link>
-          <Link className="btn-secondary" to={`/classes/${classId}/results`}><BarChart3 size={16} />Results</Link>
-          <Link className="btn-secondary" to={codespacePath}><Code2 size={16} />Codespace</Link>
-          <Link className="btn-secondary" to={`/classes/${classId}/notifications/email`}><Mail size={16} />Notify Students</Link>
+        <div className="flex flex-wrap gap-2 sm:justify-end">
           <Link className="btn-primary" to={`/classes/${classId}/units/new`}><Plus size={16} />New unit</Link>
-          <button type="button" onClick={() => { setConfirmName(''); setConfirmDelete(true) }} className="btn-secondary text-red-700 hover:border-red-200 hover:bg-red-50"><Trash2 size={16} />Delete class</button>
+          <div className="relative" ref={toolsRef}>
+            <button type="button" aria-haspopup="menu" aria-expanded={toolsOpen} onClick={() => setToolsOpen(current => !current)} className="btn-secondary">
+              <Settings2 size={16} />Teacher tools<ChevronDown size={15} />
+            </button>
+            {toolsOpen && <div role="menu" className="absolute right-0 z-30 mt-2 w-60 overflow-hidden rounded-xl border border-slate-200 bg-white py-2 shadow-lift">
+              <ToolLink to={`/classes/${classId}/edit`} icon={<Edit3 size={16} />} onClick={() => setToolsOpen(false)}>Edit class</ToolLink>
+              <ToolLink to={`/classes/${classId}/members`} icon={<Users size={16} />} onClick={() => setToolsOpen(false)}>Members</ToolLink>
+              <ToolLink to={`/classes/${classId}/results`} icon={<BarChart3 size={16} />} onClick={() => setToolsOpen(false)}>Results</ToolLink>
+              <ToolLink to={codespacePath} icon={<Code2 size={16} />} onClick={() => setToolsOpen(false)}>Codespace</ToolLink>
+              <ToolLink to={`/classes/${classId}/notifications/email`} icon={<Mail size={16} />} onClick={() => setToolsOpen(false)}>Notify Students</ToolLink>
+              <div className="my-2 border-t border-slate-200" />
+              <button type="button" role="menuitem" onClick={() => { setToolsOpen(false); setConfirmName(''); setConfirmDelete(true) }} className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-semibold text-red-700 hover:bg-red-50"><Trash2 size={16} />Delete class</button>
+            </div>}
+          </div>
         </div>
       </div>
     </section> : <div className="mt-5 flex justify-end gap-2"><Link className="btn-secondary" to={codespacePath}><Code2 size={16} />Codespace</Link><Link className="btn-secondary" to={`/classes/${classId}/members`}><Users size={16} />View members</Link></div>}
@@ -131,13 +191,71 @@ export default function ClassDetails() {
     {error && <p className="mt-5 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</p>}
     <section className="mt-8">
       <div className="mb-4 flex items-end justify-between gap-4">
-        <div><h2 className="section-title">Course units</h2><p className="mt-1 text-sm text-slate-500">Work through the class content in order.</p></div>
-        <span className="text-xs font-semibold text-slate-400">{units.length} {units.length === 1 ? 'unit' : 'units'}</span>
+        <div><h2 className="section-title">{contentView === 'active' ? 'Active users' : 'Course units'}</h2><p className="mt-1 text-sm text-slate-500">{contentView === 'active' ? 'See what class members are viewing or working on.' : 'Work through the class content in order.'}</p></div>
+        {teacher ? <div className="flex rounded-xl border border-slate-200 bg-white p-1">
+          <button type="button" onClick={() => setContentView('units')} className={`rounded-lg px-3 py-1.5 text-xs font-bold ${contentView === 'units' ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-50'}`}>Units</button>
+          <button type="button" onClick={() => setContentView('active')} className={`rounded-lg px-3 py-1.5 text-xs font-bold ${contentView === 'active' ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-50'}`}>Active users</button>
+        </div> : <span className="text-xs font-semibold text-slate-400">{units.length} {units.length === 1 ? 'unit' : 'units'}</span>}
       </div>
-      <div className="grid gap-3">
+      {contentView === 'units' ? <div className="grid gap-3">
         {units.map(unit => <UnitCard key={unit.id} unit={unit} classId={classId} canEdit={teacher} onDelete={deleteUnit} />)}
         {!units.length && <div className="empty-state">{teacher ? 'Create the first unit to begin organizing this class.' : 'Your teacher has not published any units yet.'}</div>}
-      </div>
+      </div> : <ActiveUsersPanel users={activeUsers} loading={activeUsersLoading} />}
     </section>
   </>
+}
+
+function ToolLink({ to, icon, onClick, children }) {
+  return <Link role="menuitem" className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50" to={to} onClick={onClick}>{icon}{children}</Link>
+}
+
+function ActiveUsersPanel({ users, loading }) {
+  if (loading) return <div className="grid gap-2">{[0, 1, 2].map(item => <div key={item} className="h-16 animate-pulse rounded-xl bg-slate-100" />)}</div>
+  return <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-card">
+    <div className="overflow-x-auto">
+      <table className="min-w-full divide-y divide-slate-200 text-sm">
+        <thead className="bg-slate-50 text-left text-xs font-bold uppercase text-slate-500">
+          <tr><th className="px-4 py-3">Name</th><th className="px-4 py-3">Email</th><th className="px-4 py-3">Current activity</th><th className="px-4 py-3">Viewing / working on</th><th className="px-4 py-3">Last active</th><th className="px-4 py-3">Status</th></tr>
+        </thead>
+        <tbody className="divide-y divide-slate-100">
+          {users.map(user => <tr key={user.user_id}>
+            <td className="px-4 py-3 font-semibold text-slate-900">{user.name}</td>
+            <td className="px-4 py-3 text-slate-500">{user.email}</td>
+            <td className="px-4 py-3 text-slate-700">{activityLabel(user.activity_type)}</td>
+            <td className="px-4 py-3 text-slate-500">{user.activity_label || user.route_path || 'Class activity'}</td>
+            <td className="px-4 py-3 text-slate-500">{formatLastActive(user.last_active_at)}</td>
+            <td className="px-4 py-3"><StatusBadge status={user.status} /></td>
+          </tr>)}
+        </tbody>
+      </table>
+    </div>
+    {!users.length && <div className="empty-state m-4">No recent activity yet.</div>}
+    <p className="border-t border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-500">Activity updates are approximate and refresh every few seconds.</p>
+  </div>
+}
+
+function StatusBadge({ status }) {
+  const classes = {
+    active: 'bg-emerald-50 text-emerald-700',
+    recently_active: 'bg-amber-50 text-amber-700',
+    offline: 'bg-slate-100 text-slate-600',
+  }
+  return <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold uppercase ${classes[status] || classes.offline}`}>{status.replace('_', ' ')}</span>
+}
+
+function activityLabel(type) {
+  return {
+    material_view: 'Reading material',
+    assessment_attempt: 'Working on assessment',
+    assessment_view: 'Viewing assessment',
+    codespace_task: 'Working in codespace',
+    codespace_view: 'Viewing codespace',
+    class_view: 'Viewing class',
+    dashboard: 'Viewing dashboard',
+    idle: 'Idle',
+  }[type] || 'Class activity'
+}
+
+function formatLastActive(value) {
+  return new Date(value).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })
 }

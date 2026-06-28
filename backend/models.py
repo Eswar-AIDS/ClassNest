@@ -49,6 +49,29 @@ class ClassMember(Base):
         return role
 
 
+class ClassActivity(Base):
+    __tablename__ = "class_activity"
+    __table_args__ = (
+        UniqueConstraint("classroom_id", "user_id"),
+        Index("idx_class_activity_classroom_id", "classroom_id"),
+        Index("idx_class_activity_user_id", "user_id"),
+        Index("idx_class_activity_last_active", "last_active_at"),
+    )
+    id = Column(Integer, primary_key=True)
+    classroom_id = Column(Integer, ForeignKey("classrooms.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    activity_type = Column(Text, nullable=False)
+    activity_label = Column(Text, nullable=True)
+    entity_type = Column(Text, nullable=True)
+    entity_id = Column(Integer, nullable=True)
+    route_path = Column(Text, nullable=True)
+    last_active_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    classroom = relationship("Classroom")
+    user = relationship("User")
+
+
 class Unit(Base):
     __tablename__ = "units"
     id = Column(Integer, primary_key=True)

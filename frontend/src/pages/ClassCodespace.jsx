@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { ArrowLeft, CheckCircle2, Code2, Edit3, Eye, FileUp, Plus, Send, Trash2 } from 'lucide-react'
 import api, { errorMessage } from '../api/axios'
+import useClassActivity from '../hooks/useClassActivity'
 
 export default function ClassCodespace() {
   const { classId, codespaceId } = useParams()
@@ -35,6 +36,12 @@ export default function ClassCodespace() {
   }, [classId, codespaceId])
 
   const teacher = room?.role === 'teacher'
+  useClassActivity(room?.id, codespace ? {
+    activity_type: 'codespace_view',
+    activity_label: codespace.name,
+    entity_type: 'codespace',
+    entity_id: codespace.id,
+  } : null)
   const publishTask = async task => {
     try {
       const { data } = await api.post(`/coding-tasks/${task.id}/publish`)

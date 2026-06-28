@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { ArrowLeft, Maximize2, Minimize2, MonitorUp } from 'lucide-react'
 import api, { errorMessage } from '../api/axios'
+import useClassActivity from '../hooks/useClassActivity'
 
 const PythonCodeWorkspace = lazy(() => import('../components/code/PythonCodeWorkspace'))
 const WebCodeWorkspace = lazy(() => import('../components/code/WebCodeWorkspace'))
@@ -39,6 +40,13 @@ export default function CodingTaskAttempt() {
     }).catch(err => { if (active) setError(errorMessage(err)) })
     return () => { active = false }
   }, [classId, codespaceId, taskId])
+
+  useClassActivity(codespace?.classroom_id, task ? {
+    activity_type: 'codespace_task',
+    activity_label: task.title,
+    entity_type: 'coding_task',
+    entity_id: task.id,
+  } : null)
 
   useEffect(() => {
     const onKeyDown = event => {

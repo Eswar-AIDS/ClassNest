@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, BarChart3, Clock, FileQuestion, Play, ShieldCheck } from 'lucide-react'
 import { errorMessage, getOnce } from '../api/axios'
 import { AssessmentPageSkeleton } from '../components/LoadingSkeletons'
+import useClassActivity from '../hooks/useClassActivity'
 
 export default function AssessmentDetails() {
   const { assessmentId } = useParams()
@@ -10,6 +11,7 @@ export default function AssessmentDetails() {
   const [assessment, setAssessment] = useState(null)
   const [role, setRole] = useState(null)
   const [unitId, setUnitId] = useState(null)
+  const [classId, setClassId] = useState(null)
   const [error, setError] = useState('')
   const [now] = useState(() => Date.now())
 
@@ -22,12 +24,20 @@ export default function AssessmentDetails() {
       const classroom = await getOnce(`/classrooms/${unit.data.classroom_id}`)
       if (!active) return
       setUnitId(unit.data.id)
+      setClassId(unit.data.classroom_id)
       setRole(classroom.data.role)
     }).catch(err => {
       if (active) setError(errorMessage(err))
     })
     return () => { active = false }
   }, [assessmentId])
+
+  useClassActivity(classId, assessment ? {
+    activity_type: 'assessment_view',
+    activity_label: assessment.title,
+    entity_type: 'assessment',
+    entity_id: assessment.id,
+  } : null)
 
   if (error) return <p className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</p>
   if (!assessment || !role) return <AssessmentPageSkeleton />

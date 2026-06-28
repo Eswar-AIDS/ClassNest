@@ -111,6 +111,39 @@ class MemberOut(BaseModel):
     joined_at: datetime
 
 
+ActivityType = Literal[
+    "dashboard",
+    "class_view",
+    "material_view",
+    "assessment_view",
+    "assessment_attempt",
+    "codespace_view",
+    "codespace_task",
+    "idle",
+]
+
+
+class ClassActivityInput(BaseModel):
+    activity_type: ActivityType
+    activity_label: Optional[str] = Field(default=None, max_length=300)
+    entity_type: Optional[str] = Field(default=None, max_length=80)
+    entity_id: Optional[int] = None
+    route_path: Optional[str] = Field(default=None, max_length=500)
+
+
+class ActiveUserOut(BaseModel):
+    user_id: int
+    name: str
+    email: str
+    activity_type: ActivityType
+    activity_label: Optional[str] = None
+    entity_type: Optional[str] = None
+    entity_id: Optional[int] = None
+    route_path: Optional[str] = None
+    last_active_at: datetime
+    status: Literal["active", "recently_active", "offline"]
+
+
 class UnitCreate(BaseModel):
     title: str = Field(min_length=1, max_length=200)
     description: str = ""

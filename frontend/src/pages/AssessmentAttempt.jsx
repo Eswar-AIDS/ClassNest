@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { AlertTriangle, BookOpen, CheckCircle2, Clock, Play, Send, ShieldCheck } from 'lucide-react'
 import api, { apiBaseURL, errorMessage, getOnce } from '../api/axios'
 import { AssessmentPageSkeleton } from '../components/common/Loading'
+import useClassActivity from '../hooks/useClassActivity'
 
 const PythonCodeWorkspace = lazy(() => import('../components/code/PythonCodeWorkspace'))
 
@@ -30,6 +31,7 @@ export default function AssessmentAttempt() {
   const { assessmentId } = useParams()
   const navigate = useNavigate()
   const [assessment, setAssessment] = useState(null)
+  const [classId, setClassId] = useState(null)
   const [answers, setAnswers] = useState({})
   const answersRef = useRef({})
   const [error, setError] = useState('')
@@ -48,14 +50,23 @@ export default function AssessmentAttempt() {
   const currentAttemptId = assessment?.attempt_id
 
   useEffect(() => {
-    getOnce(`/assessments/${assessmentId}`).then(response => {
+    getOnce(`/assessments/${assessmentId}`).then(async response => {
       setAssessment(response.data)
+      const unit = await getOnce(`/units/${response.data.unit_id}`)
+      setClassId(unit.data.classroom_id)
       const initialAnswers = Object.fromEntries(response.data.questions.filter(question => question.question_type === 'CODING' && question.starter_code).map(question => [question.id, question.starter_code]))
       setAnswers(initialAnswers)
       answersRef.current = initialAnswers
       setStarted(response.data.attempt_status === 'in_progress')
     }).catch(err => setError(errorMessage(err)))
   }, [assessmentId])
+
+  useClassActivity(classId, assessment ? {
+    activity_type: 'assessment_attempt',
+    activity_label: assessment.title,
+    entity_type: 'assessment',
+    entity_id: assessment.id,
+  } : null)
 
   useEffect(() => {
     if (!assessment || !isTimed(assessment)) return undefined

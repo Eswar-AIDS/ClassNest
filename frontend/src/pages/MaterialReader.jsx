@@ -5,11 +5,13 @@ import remarkGfm from 'remark-gfm'
 import { ArrowLeft, Download, ExternalLink, File, FileImage, FileSpreadsheet, FileText, Trash2 } from 'lucide-react'
 import api, { errorMessage, getOnce } from '../api/axios'
 import { PageSkeleton } from '../components/common/Loading'
+import useClassActivity from '../hooks/useClassActivity'
 
 export default function MaterialReader() {
   const { materialId } = useParams()
   const [item, setItem] = useState(null)
   const [role, setRole] = useState(null)
+  const [classId, setClassId] = useState(null)
   const [error, setError] = useState('')
 
   useEffect(() => {
@@ -17,9 +19,17 @@ export default function MaterialReader() {
       setItem(response.data)
       const unit = await getOnce(`/units/${response.data.unit_id}`)
       const classroom = await getOnce(`/classrooms/${unit.data.classroom_id}`)
+      setClassId(unit.data.classroom_id)
       setRole(classroom.data.role)
     }).catch(err => setError(errorMessage(err)))
   }, [materialId])
+
+  useClassActivity(classId, item ? {
+    activity_type: 'material_view',
+    activity_label: item.title,
+    entity_type: 'material',
+    entity_id: item.id,
+  } : null)
 
   const removeAttachment = async attachment => {
     if (!confirm(`Delete ${attachment.file_name}?`)) return
