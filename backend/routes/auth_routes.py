@@ -1,4 +1,3 @@
-import re
 import hashlib
 import os
 import secrets
@@ -8,11 +7,15 @@ from sqlalchemy.orm import Session
 from database import get_db
 from auth import create_access_token, get_current_user, hash_password, verify_password
 from services.email_service import send_email
+from services.email_validation import (
+    INVALID_EMAIL_FORMAT_MESSAGE,
+    is_valid_email_format,
+    normalize_email,
+    validate_registration_email,
+)
 import models, schemas
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
-SREC_EMAIL_ERROR = "Use your official SREC email address ending with @srec.ac.in"
-SREC_EMAIL_RE = re.compile(r"^[A-Za-z0-9._%+-]+@srec\.ac\.in$")
 RESET_SUCCESS_MESSAGE = "If an account exists for this email, a reset link has been sent."
 RESET_TOKEN_MINUTES = 30
 
@@ -35,9 +38,10 @@ def send_password_reset_email(recipient_email: str, name: str, reset_link: str):
 
 @router.post("/register", response_model=schemas.Token, status_code=201)
 def register(data: schemas.UserCreate, db: Session = Depends(get_db)):
-    email = str(data.email).strip().lower()
-    if not email.endswith("@srec.ac.in") or not SREC_EMAIL_RE.fullmatch(email):
-        raise HTTPException(status_code=400, detail=SREC_EMAIL_ERROR)
+    try:
+        email = validate_registration_email(data.email)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     if db.query(models.User).filter_by(email=email).first():
         raise HTTPException(409, "Email is already registered")
     user = models.User(name=data.name.strip(), email=email, password_hash=hash_password(data.password))
@@ -47,7 +51,8 @@ def register(data: schemas.UserCreate, db: Session = Depends(get_db)):
 
 @router.post("/login", response_model=schemas.Token)
 def login(data: schemas.LoginInput, db: Session = Depends(get_db)):
-    user = db.query(models.User).filter_by(email=data.email.lower()).first()
+    email = normalize_email(data.email)
+    user = db.query(models.User).filter_by(email=email).first()
     if not user or not verify_password(data.password, user.password_hash):
         raise HTTPException(401, "Incorrect email or password")
     return {"access_token": create_access_token(user.id)}
@@ -55,7 +60,9 @@ def login(data: schemas.LoginInput, db: Session = Depends(get_db)):
 
 @router.post("/forgot-password", response_model=schemas.MessageOut)
 def forgot_password(data: schemas.ForgotPasswordInput, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
-    email = str(data.email).strip().lower()
+    email = normalize_email(data.email)
+    if not is_valid_email_format(email):
+        raise HTTPException(status_code=400, detail=INVALID_EMAIL_FORMAT_MESSAGE)
     user = db.query(models.User).filter_by(email=email).first()
     if user:
         raw_token = secrets.token_urlsafe(48)

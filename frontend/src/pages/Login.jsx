@@ -7,6 +7,8 @@ import AuthShell from './AuthShell'
 import { ButtonLoader } from '../components/common/Loading'
 
 const RESET_MESSAGE = 'If an account exists for this email, a reset link has been sent.'
+const EMAIL_FORMAT_ERROR = 'Please enter a valid email address.'
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/
 
 export default function Login() {
   const [form, setForm] = useState({ email: '', password: '' })
@@ -23,10 +25,16 @@ export default function Login() {
 
   const submit = async event => {
     event.preventDefault()
+    const email = form.email.trim().toLowerCase()
+    if (!EMAIL_RE.test(email)) {
+      setError(EMAIL_FORMAT_ERROR)
+      setForm(current => ({ ...current, email }))
+      return
+    }
     setBusy(true)
     setError('')
     try {
-      await login(form)
+      await login({ ...form, email })
       sessionStorage.removeItem('classnest_return_to')
       navigate(returnTo || '/', { replace: true })
     } catch (err) {
@@ -38,11 +46,17 @@ export default function Login() {
 
   const sendReset = async event => {
     event.preventDefault()
+    const email = resetEmail.trim().toLowerCase()
+    if (!EMAIL_RE.test(email)) {
+      setError(EMAIL_FORMAT_ERROR)
+      setResetEmail(email)
+      return
+    }
     setBusy(true)
     setError('')
     setNotice('')
     try {
-      await api.post('/auth/forgot-password', { email: resetEmail.trim().toLowerCase() })
+      await api.post('/auth/forgot-password', { email })
       setNotice(RESET_MESSAGE)
     } catch (err) {
       setError(errorMessage(err))
@@ -54,14 +68,14 @@ export default function Login() {
   return <AuthShell title={mode === 'login' ? 'Welcome back' : 'Reset your password'} subtitle={mode === 'login' ? 'Sign in to continue teaching, learning, and keeping every classroom organized.' : 'Enter your email and we will send a secure reset link if the account exists.'} footer={mode === 'login' ? <>New to ClassNest? <Link className="auth-link" to="/register" state={{ from: returnTo }}>Create an account</Link></> : <button type="button" className="auth-link" onClick={() => { setMode('login'); setError(''); setNotice('') }}>Back to sign in</button>}>
     {mode === 'login' ? <form onSubmit={submit} className="space-y-5">
       {error && <p className="auth-error">{error}</p>}
-      <label><span className="auth-label">Email address</span><input className="auth-field" type="email" required autoComplete="email" value={form.email} onChange={event => setForm({ ...form, email: event.target.value })} /></label>
+      <label><span className="auth-label">Email address</span><input className="auth-field" type="email" required autoComplete="email" value={form.email} onBlur={() => setForm(current => ({ ...current, email: current.email.trim().toLowerCase() }))} onChange={event => setForm({ ...form, email: event.target.value })} /></label>
       <label><span className="auth-label">Password</span><PasswordField value={form.password} onChange={value => setForm({ ...form, password: value })} show={showPassword} onToggle={() => setShowPassword(current => !current)} autoComplete="current-password" /></label>
       <div className="auth-forgot-row"><button type="button" className="auth-link text-sm" onClick={() => { setMode('reset'); setResetEmail(form.email); setError(''); setNotice('') }}>Forgot password?</button></div>
       <button disabled={busy} className="auth-button w-full">{busy ? <ButtonLoader label="Signing in..." /> : 'Sign in'}</button>
     </form> : <form onSubmit={sendReset} className="space-y-5">
       {error && <p className="auth-error">{error}</p>}
       {notice && <p className="rounded-xl border border-emerald-200 bg-emerald-50/90 p-3 text-sm font-medium text-emerald-700">{notice}</p>}
-      <label><span className="auth-label">Email address</span><input className="auth-field" type="email" required autoComplete="email" value={resetEmail} onChange={event => setResetEmail(event.target.value)} /></label>
+      <label><span className="auth-label">Email address</span><input className="auth-field" type="email" required autoComplete="email" value={resetEmail} onBlur={() => setResetEmail(current => current.trim().toLowerCase())} onChange={event => setResetEmail(event.target.value)} /></label>
       <button disabled={busy} className="auth-button w-full">{busy ? <ButtonLoader label="Sending..." /> : 'Send reset link'}</button>
     </form>}
   </AuthShell>

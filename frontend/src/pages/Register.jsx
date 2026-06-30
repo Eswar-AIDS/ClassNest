@@ -5,8 +5,8 @@ import { errorMessage } from '../api/axios'
 import AuthShell from './AuthShell'
 import { ButtonLoader } from '../components/common/Loading'
 
-const SREC_EMAIL_ERROR = 'Use your official SREC email address ending with @srec.ac.in'
-const SREC_EMAIL_RE = /^[A-Za-z0-9._%+-]+@srec\.ac\.in$/
+const EMAIL_FORMAT_ERROR = 'Please enter a valid email address.'
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/
 
 export default function Register() {
   const [form, setForm] = useState({ name: '', email: '', password: '' })
@@ -20,8 +20,8 @@ export default function Register() {
   const submit = async event => {
     event.preventDefault()
     const email = form.email.trim().toLowerCase()
-    if (!email.endsWith('@srec.ac.in') || !SREC_EMAIL_RE.test(email)) {
-      setError(SREC_EMAIL_ERROR)
+    if (!EMAIL_RE.test(email)) {
+      setError(EMAIL_FORMAT_ERROR)
       setForm(current => ({ ...current, email }))
       return
     }
